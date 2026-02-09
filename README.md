@@ -8,6 +8,12 @@ Chrome extension + local daemon + CLI for executing commands in a browser-hosted
 
 中文文档：[`README_zh.md`](README_zh.md)
 
+## Why It Matters
+
+- Agent-first workflow: run local LLM Agent loops, but execute commands in cloud browser terminals.
+- Cloud-side verifiable execution: streamed output + exit-code parity makes remote runs observable and auditable from local automation.
+- Practical non-local debugging: useful for AI debugging across complex remote environments (for example cloud GPU, container clusters, and bastion-only networks) while keeping a tight local frontier-model loop.
+
 ## What You Get
 
 1. `browterm-daemon` on localhost (`ws://127.0.0.1:17373`).
