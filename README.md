@@ -32,7 +32,7 @@ Chrome extension + local daemon + CLI for executing commands in a browser-hosted
 
 ### End-to-End Execution Flow
 
-1. Local CLI (`browterm`) sends an `exec` request with command, timeout, token, and client metadata to the daemon.
+1. Local CLI (`browterm`) sends an `exec` request with command, timeout, and client metadata to the daemon.
 2. Bridge daemon authenticates the request, enqueues it, and guarantees single-active execution.
 3. Bridge uses `@browser-terminal-use/core` to wrap the user command with unique start/rc/end markers.
 4. Chrome extension service worker routes the wrapped command to the currently bound terminal tab.
@@ -45,7 +45,7 @@ Chrome extension + local daemon + CLI for executing commands in a browser-hosted
 
 1. Requests are serialized in the daemon queue to avoid cross-command contamination on one terminal tab.
 2. `--timeout-ms` is enforced server-side; timeout ends active request and unblocks queue.
-3. `browterm cancel <requestId>` can abort active or queued requests from any client sharing token.
+3. `browterm cancel <requestId>` can abort active or queued requests.
 4. If marker parsing fails, daemon returns a capture/compatibility error instead of hanging indefinitely.
 
 ## Install and Run (macOS + Chrome)
@@ -67,12 +67,13 @@ npm install -g @browser-terminal-use/bridge @browser-terminal-use/cli
 Run daemon on localhost:
 
 ```bash
-browterm-daemon --host 127.0.0.1 --port 17373 --token your-shared-token
+browterm-daemon --host 127.0.0.1 --port 17373
 ```
 
 Optional flags:
 
 ```bash
+--token <token>           # optional, use it for stronger security (must match extension/CLI)
 --default-timeout-ms 120000
 --max-timeout-ms 600000
 --ping-interval-ms 15000
@@ -97,7 +98,6 @@ curl http://127.0.0.1:17373/v1/health
 1. Open extension options page.
 2. Set:
    - **Bridge URL**: `ws://127.0.0.1:17373/extension`
-   - **Auth Token**: same token used in daemon startup.
 3. Save.
 
 ### 6. Bind Terminal Tab
@@ -112,25 +112,25 @@ curl http://127.0.0.1:17373/v1/health
 Health check:
 
 ```bash
-browterm --token your-shared-token health
+browterm health
 ```
 
 Execute command:
 
 ```bash
-browterm --token your-shared-token exec "uname -a"
+browterm exec "uname -a"
 ```
 
 JSON mode:
 
 ```bash
-browterm --token your-shared-token exec --json "ls -la"
+browterm exec --json "ls -la"
 ```
 
 Cancel running request:
 
 ```bash
-browterm --token your-shared-token cancel <requestId>
+browterm cancel <requestId>
 ```
 
 ### 8. Expected Behavior
@@ -144,7 +144,7 @@ browterm --token your-shared-token cancel <requestId>
 #### `execution failed: extension is not connected`
 
 - Verify daemon is running.
-- Verify extension options URL/token.
+- Verify extension options URL.
 - Ensure extension service worker is active (open extensions page if needed).
 
 #### `no terminal tab available`
@@ -182,7 +182,7 @@ Global options:
 ```bash
 --host <host>       # default 127.0.0.1
 --port <port>       # default 17373
---token <token>     # optional but recommended
+--token <token>     # optional, use it for stronger security (must match daemon/extension)
 --client-id <id>    # stable ID for cross-session cancel
 ```
 
@@ -199,7 +199,7 @@ Global options:
 ## Security Baseline
 
 1. Daemon binds to localhost only.
-2. Optional token auth for extension + CLI handshake.
+2. Extension + CLI communicate only through the local daemon.
 3. Extension requires explicit tab binding for reliable target control.
 
 ## Known Limitations

@@ -32,7 +32,7 @@ English README: [`README.md`](README.md)
 
 ### 端到端执行流程
 
-1. 本地 CLI（`browterm`）将命令、超时、token 与客户端信息发送到守护进程。
+1. 本地 CLI（`browterm`）将命令、超时与客户端信息发送到守护进程。
 2. Bridge 守护进程完成鉴权并入队，保证同一时刻只执行一个请求。
 3. Bridge 调用 `@browser-terminal-use/core`，为用户命令添加唯一的 start/rc/end 标记。
 4. Chrome 扩展 service worker 将包装后的命令分发到当前已绑定的终端标签页。
@@ -45,7 +45,7 @@ English README: [`README.md`](README.md)
 
 1. 守护进程串行执行请求，避免同一终端标签页上的命令互相污染。
 2. `--timeout-ms` 在服务端强制生效，超时后结束当前请求并推进队列。
-3. `browterm cancel <requestId>` 可取消运行中或排队中的请求（在同 token 下生效）。
+3. `browterm cancel <requestId>` 可取消运行中或排队中的请求。
 4. 若 marker 解析失败，守护进程会返回采集/兼容性错误，而不是无限挂起。
 
 ## 安装与运行指南（macOS + Chrome）
@@ -67,12 +67,13 @@ npm install -g @browser-terminal-use/bridge @browser-terminal-use/cli
 在本机 `localhost` 启动守护进程：
 
 ```bash
-browterm-daemon --host 127.0.0.1 --port 17373 --token your-shared-token
+browterm-daemon --host 127.0.0.1 --port 17373
 ```
 
 可选参数：
 
 ```bash
+--token <token>           # 可选，可用于提高安全性（需与扩展/CLI 一致）
 --default-timeout-ms 120000
 --max-timeout-ms 600000
 --ping-interval-ms 15000
@@ -97,7 +98,6 @@ curl http://127.0.0.1:17373/v1/health
 1. 打开扩展的设置页面（Options）。
 2. 填写：
    - **Bridge URL**: `ws://127.0.0.1:17373/extension`
-   - **Auth Token**: 与守护进程启动参数中的 `--token` 保持一致。
 3. 点击保存。
 
 ### 6. 绑定终端标签页
@@ -112,25 +112,25 @@ curl http://127.0.0.1:17373/v1/health
 健康检查：
 
 ```bash
-browterm --token your-shared-token health
+browterm health
 ```
 
 执行命令：
 
 ```bash
-browterm --token your-shared-token exec "uname -a"
+browterm exec "uname -a"
 ```
 
 JSON 输出模式：
 
 ```bash
-browterm --token your-shared-token exec --json "ls -la"
+browterm exec --json "ls -la"
 ```
 
 取消运行中的请求：
 
 ```bash
-browterm --token your-shared-token cancel <requestId>
+browterm cancel <requestId>
 ```
 
 ### 8. 预期行为
@@ -144,7 +144,7 @@ browterm --token your-shared-token cancel <requestId>
 #### `execution failed: extension is not connected`
 
 - 确认 Bridge 守护进程正在运行。
-- 确认扩展中的 URL 和 Token 配置正确。
+- 确认扩展中的 URL 配置正确。
 - 确认扩展 service worker 已激活（可打开扩展管理页触发）。
 
 #### `no terminal tab available`
@@ -182,7 +182,7 @@ browterm cancel <requestId>
 ```bash
 --host <host>       # 默认 127.0.0.1
 --port <port>       # 默认 17373
---token <token>     # 可选但推荐
+--token <token>     # 可选，可用于提高安全性（需与守护进程/扩展一致）
 --client-id <id>    # 跨会话取消时使用的稳定客户端 ID
 ```
 
@@ -199,7 +199,7 @@ browterm cancel <requestId>
 ## 安全基线
 
 1. 守护进程仅监听 localhost。
-2. 扩展与 CLI 握手支持可选 token 鉴权。
+2. 扩展与 CLI 仅通过本地守护进程通信。
 3. 扩展需要显式绑定标签页，避免误操作到错误终端。
 
 ## 已知限制

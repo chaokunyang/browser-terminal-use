@@ -20,7 +20,7 @@ npx @browser-terminal-use/cli --help
 ## Usage
 
 ```bash
-browterm [--host HOST] [--port PORT] [--token TOKEN] <command>
+browterm [--host HOST] [--port PORT] <command>
 ```
 
 ## Commands
@@ -36,7 +36,7 @@ cancel <requestId>
 ```text
 --host <host>         Bridge host (default: 127.0.0.1)
 --port <port>         Bridge port (default: 17373)
---token <token>       Shared auth token (optional)
+--token <token>       Shared auth token (optional, improves security)
 --client-id <id>      Stable client id (optional)
 --help                Show help
 ```
@@ -44,10 +44,10 @@ cancel <requestId>
 ## Examples
 
 ```bash
-browterm --token your-token health
-browterm --token your-token exec "uname -a"
-browterm --token your-token exec --timeout-ms 30000 --json "ls -la"
-browterm --token your-token cancel <requestId>
+browterm health
+browterm exec "uname -a"
+browterm exec --timeout-ms 30000 --json "ls -la"
+browterm cancel <requestId>
 ```
 
 ## Exit behavior
