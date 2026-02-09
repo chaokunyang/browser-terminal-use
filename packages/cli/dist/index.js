@@ -3,13 +3,14 @@ import { randomUUID } from "node:crypto";
 import process from "node:process";
 import WebSocket from "ws";
 import { PROTOCOL_VERSION, safeParseMessage, stringifyMessage } from "@browser-terminal-use/core";
+import { parseExecArgs, parseGlobalOptions, normalizeExitCode } from "./args.js";
 async function main() {
     const argv = process.argv.slice(2);
     if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
         printHelp();
         return;
     }
-    const { options, remaining } = parseGlobalOptions(argv);
+    const { options, remaining } = parseGlobalOptions(argv, process.env, `cli-${randomUUID()}`);
     const command = remaining[0];
     if (!command) {
         printHelp();
@@ -177,69 +178,6 @@ async function runCancel(options, args) {
     console.log(`cancelled request ${requestId}`);
     ws.close(1000, "done");
 }
-function parseGlobalOptions(argv) {
-    const remaining = [];
-    const options = {
-        host: process.env.BT_BRIDGE_HOST ?? "127.0.0.1",
-        port: toInt(process.env.BT_BRIDGE_PORT, 17373),
-        token: process.env.BT_TOKEN,
-        clientId: process.env.BT_CLIENT_ID ?? `cli-${randomUUID()}`
-    };
-    for (let i = 0; i < argv.length; i += 1) {
-        const arg = argv[i];
-        if (arg === "--host") {
-            options.host = argv[i + 1] ?? options.host;
-            i += 1;
-            continue;
-        }
-        if (arg === "--port") {
-            options.port = toInt(argv[i + 1], options.port);
-            i += 1;
-            continue;
-        }
-        if (arg === "--token") {
-            options.token = argv[i + 1] ?? options.token;
-            i += 1;
-            continue;
-        }
-        if (arg === "--client-id") {
-            options.clientId = argv[i + 1] ?? options.clientId;
-            i += 1;
-            continue;
-        }
-        remaining.push(arg);
-    }
-    return { options, remaining };
-}
-function parseExecArgs(args) {
-    let timeoutMs;
-    let json = false;
-    let requestId;
-    const commandParts = [];
-    for (let i = 0; i < args.length; i += 1) {
-        const arg = args[i];
-        if (arg === "--timeout-ms") {
-            timeoutMs = toInt(args[i + 1], 120000);
-            i += 1;
-            continue;
-        }
-        if (arg === "--json") {
-            json = true;
-            continue;
-        }
-        if (arg === "--request-id") {
-            requestId = args[i + 1];
-            i += 1;
-            continue;
-        }
-        commandParts.push(arg);
-    }
-    const command = commandParts.join(" ").trim();
-    if (!command) {
-        throw new Error("usage: browterm exec [--timeout-ms N] [--json] [--request-id ID] <command>");
-    }
-    return { command, timeoutMs, json, requestId };
-}
 async function connectCli(options) {
     const ws = new WebSocket(`ws://${options.host}:${options.port}/cli`);
     await new Promise((resolve, reject) => {
@@ -334,28 +272,6 @@ async function waitForMessage(ws, predicate, timeoutMs = 6000) {
         ws.once("close", onClose);
         ws.once("error", onError);
     });
-}
-function normalizeExitCode(exitCode) {
-    if (!Number.isFinite(exitCode)) {
-        return 1;
-    }
-    if (exitCode < 0) {
-        return 1;
-    }
-    if (exitCode > 255) {
-        return 255;
-    }
-    return Math.floor(exitCode);
-}
-function toInt(value, fallback) {
-    if (!value) {
-        return fallback;
-    }
-    const parsed = Number.parseInt(value, 10);
-    if (Number.isNaN(parsed)) {
-        return fallback;
-    }
-    return parsed;
 }
 function printHelp() {
     // eslint-disable-next-line no-console
