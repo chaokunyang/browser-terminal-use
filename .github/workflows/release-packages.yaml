@@ -90,6 +90,19 @@ jobs:
           npm view @browser-terminal-use/bridge name
           npm view @browser-terminal-use/cli name
 
+      - name: Verify repository metadata for provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_REPO_URL="https://github.com/chaokunyang/browser-terminal-use"
+          CORE_REPO_URL="$(npm pkg get repository.url --workspace @browser-terminal-use/core | tr -d '\"')"
+          BRIDGE_REPO_URL="$(npm pkg get repository.url --workspace @browser-terminal-use/bridge | tr -d '\"')"
+          CLI_REPO_URL="$(npm pkg get repository.url --workspace @browser-terminal-use/cli | tr -d '\"')"
+
+          test "$CORE_REPO_URL" = "$EXPECTED_REPO_URL"
+          test "$BRIDGE_REPO_URL" = "$EXPECTED_REPO_URL"
+          test "$CLI_REPO_URL" = "$EXPECTED_REPO_URL"
+
       - name: Publish @browser-terminal-use/core
         working-directory: packages/core
         run: npm publish --access public --provenance
