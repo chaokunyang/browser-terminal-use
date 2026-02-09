@@ -1,5 +1,5 @@
 {
-  "name": "@bt/shared",
+  "name": "@browser-terminal-use/core",
   "version": "0.1.0",
   "type": "module",
   "exports": {

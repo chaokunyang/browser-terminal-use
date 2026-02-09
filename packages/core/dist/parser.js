@@ -36,12 +36,9 @@ export class MarkerParser {
         if (this.state !== "awaiting_start") {
             return;
         }
-        const startIdx = this.buffer.indexOf(this.markers.start);
+        const startIdx = findStartMarkerIndex(this.buffer, this.markers.start);
         if (startIdx < 0) {
-            const keep = Math.max(this.markers.start.length - 1, 0);
-            if (this.buffer.length > keep) {
-                this.buffer = this.buffer.slice(this.buffer.length - keep);
-            }
+            this.buffer = keepPotentialStartPrefix(this.buffer, this.markers.start);
             return;
         }
         this.buffer = trimSingleLeadingNewline(this.buffer.slice(startIdx + this.markers.start.length));
@@ -101,5 +98,53 @@ function trimSingleLeadingNewline(input) {
         return input.slice(1);
     }
     return input;
+}
+function findStartMarkerIndex(buffer, marker) {
+    let from = 0;
+    while (true) {
+        const idx = buffer.indexOf(marker, from);
+        if (idx < 0) {
+            return -1;
+        }
+        const afterPos = idx + marker.length;
+        if (afterPos >= buffer.length) {
+            return -1;
+        }
+        if (isMarkerTerminator(buffer, afterPos)) {
+            return idx;
+        }
+        from = idx + 1;
+    }
+}
+function keepPotentialStartPrefix(buffer, marker) {
+    const max = Math.min(marker.length - 1, buffer.length);
+    for (let size = max; size > 0; size -= 1) {
+        const suffix = buffer.slice(buffer.length - size);
+        if (marker.startsWith(suffix)) {
+            return suffix;
+        }
+    }
+    return "";
+}
+function isMarkerTerminator(buffer, pos) {
+    const ch = buffer[pos];
+    if (!ch) {
+        return false;
+    }
+    if (ch === "\n" || ch === "\r") {
+        return true;
+    }
+    if (ch === "\\" && pos + 1 < buffer.length) {
+        const esc = buffer[pos + 1];
+        if (esc === "n" || esc === "r") {
+            const next = buffer[pos + 2] ?? "";
+            if (next === "'") {
+                return false;
+            }
+            return true;
+        }
+    }
+    const code = ch.charCodeAt(0);
+    return code >= 0 && code <= 0x1f;
 }
 //# sourceMappingURL=parser.js.map

@@ -8,13 +8,13 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace @bt/shared && npm run build --workspace @bt/bridge && npm run build --workspace @bt/cli",
-    "test": "npm run test --workspace @bt/shared && npm run test --workspace @bt/bridge && npm run test --workspace @bt/cli",
-    "lint": "npm run lint --workspace @bt/shared && npm run lint --workspace @bt/bridge && npm run lint --workspace @bt/cli",
-    "dev:bridge": "npm run dev --workspace @bt/bridge",
-    "dev:cli": "npm run dev --workspace @bt/cli",
-    "start:bridge": "node packages/bridge/dist/index.js",
-    "start:cli": "node packages/cli/dist/index.js"
+    "build": "npm run build --workspace @browser-terminal-use/core && npm run build --workspace @browser-terminal-use/bridge && npm run build --workspace @browser-terminal-use/cli",
+    "test": "npm run test --workspace @browser-terminal-use/core && npm run test --workspace @browser-terminal-use/bridge && npm run test --workspace @browser-terminal-use/cli",
+    "lint": "npm run lint --workspace @browser-terminal-use/core && npm run lint --workspace @browser-terminal-use/bridge && npm run lint --workspace @browser-terminal-use/cli",
+    "dev:bridge": "npm run dev --workspace @browser-terminal-use/bridge",
+    "dev:cli": "npm run dev --workspace @browser-terminal-use/cli",
+    "start:browterm-daemon": "node packages/bridge/dist/index.js",
+    "start:browterm": "node packages/cli/dist/index.js"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",

@@ -20,7 +20,7 @@ npm run build
 在本机 `localhost` 启动守护进程：
 
 ```bash
-npm run start:bridge -- --host 127.0.0.1 --port 17373 --token your-shared-token
+npm run start:browterm-daemon -- --host 127.0.0.1 --port 17373 --token your-shared-token
 ```
 
 可选参数：
@@ -65,25 +65,25 @@ curl http://127.0.0.1:17373/v1/health
 健康检查：
 
 ```bash
-npm run start:cli -- --token your-shared-token health
+npm run start:browterm -- --token your-shared-token health
 ```
 
 执行命令：
 
 ```bash
-npm run start:cli -- --token your-shared-token exec "uname -a"
+npm run start:browterm -- --token your-shared-token exec "uname -a"
 ```
 
 JSON 输出模式：
 
 ```bash
-npm run start:cli -- --token your-shared-token exec --json "ls -la"
+npm run start:browterm -- --token your-shared-token exec --json "ls -la"
 ```
 
 取消运行中的请求：
 
 ```bash
-npm run start:cli -- --token your-shared-token cancel <requestId>
+npm run start:browterm -- --token your-shared-token cancel <requestId>
 ```
 
 ## 8. 预期行为

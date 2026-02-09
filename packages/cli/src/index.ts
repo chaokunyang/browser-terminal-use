@@ -12,7 +12,7 @@ import {
   type HealthMessage,
   type HelloMessage,
   type PongMessage
-} from "@bt/shared";
+} from "@browser-terminal-use/core";
 
 interface GlobalOptions {
   host: string;
@@ -210,7 +210,7 @@ async function runExec(options: GlobalOptions, args: string[]): Promise<void> {
 async function runCancel(options: GlobalOptions, args: string[]): Promise<void> {
   const requestId = args[0];
   if (!requestId) {
-    throw new Error("usage: bt cancel <requestId>");
+    throw new Error("usage: browterm cancel <requestId>");
   }
 
   const ws = await connectCli(options);
@@ -318,7 +318,9 @@ function parseExecArgs(args: string[]): {
 
   const command = commandParts.join(" ").trim();
   if (!command) {
-    throw new Error("usage: bt exec [--timeout-ms N] [--json] [--request-id ID] <command>");
+    throw new Error(
+      "usage: browterm exec [--timeout-ms N] [--json] [--request-id ID] <command>"
+    );
   }
 
   return { command, timeoutMs, json, requestId };
@@ -466,10 +468,10 @@ function toInt(value: string | undefined, fallback: number): number {
 
 function printHelp(): void {
   // eslint-disable-next-line no-console
-  console.log(`Browser Terminal CLI (bt)
+  console.log(`Browser Terminal CLI (browterm)
 
 Usage:
-  bt [--host HOST] [--port PORT] [--token TOKEN] <command>
+  browterm [--host HOST] [--port PORT] [--token TOKEN] <command>
 
 Commands:
   health

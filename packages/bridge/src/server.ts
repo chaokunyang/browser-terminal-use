@@ -26,7 +26,7 @@ import {
   type HelloAckMessage,
   type PingMessage,
   type PongMessage
-} from "@bt/shared";
+} from "@browser-terminal-use/core";
 import type { BridgeRuntimeConfig } from "./config.js";
 
 interface SocketState {

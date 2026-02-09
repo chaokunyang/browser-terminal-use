@@ -28,10 +28,10 @@ async function main(): Promise<void> {
 
 function printHelp(): void {
   // eslint-disable-next-line no-console
-  console.log(`bt-bridge
+  console.log(`browterm-daemon
 
 Usage:
-  bt-bridge [--host 127.0.0.1] [--port 17373] [--token <token>] [--debug]
+  browterm-daemon [--host 127.0.0.1] [--port 17373] [--token <token>] [--debug]
 
 Options:
   --host <host>                  Bind host (default: 127.0.0.1)

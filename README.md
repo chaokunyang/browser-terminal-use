@@ -4,22 +4,22 @@ Chrome extension + local daemon + CLI for executing commands in a browser-hosted
 
 ## What You Get
 
-1. `bt-bridge` daemon on localhost (`ws://127.0.0.1:17373`).
+1. `browterm-daemon` on localhost (`ws://127.0.0.1:17373`).
 2. Chrome MV3 extension that:
    - binds to your terminal tab,
    - injects wrapped commands,
    - captures streamed output,
    - extracts command exit code with sentinel markers.
-3. `bt` CLI that:
+3. `browterm` CLI that:
    - sends commands,
    - streams output in real time,
    - exits with the remote command return code.
 
 ## Repository Layout
 
-- `packages/shared`: protocol contracts + marker wrapper + parser.
+- `packages/core`: protocol contracts + marker wrapper + parser.
 - `packages/bridge`: websocket daemon and request queue.
-- `packages/cli`: local CLI (`bt`).
+- `packages/cli`: local CLI (`browterm`).
 - `extension`: Chrome extension (MV3).
 - `docs/en/install.md`: install + run guide.
 
@@ -32,10 +32,10 @@ npm install
 npm run build
 ```
 
-2. Start bridge daemon (use a token in real usage):
+2. Start daemon (use a token in real usage):
 
 ```bash
-npm run start:bridge -- --token your-shared-token
+npm run start:browterm-daemon -- --token your-shared-token
 ```
 
 3. Load extension from `extension/` in Chrome:
@@ -53,21 +53,21 @@ npm run start:bridge -- --token your-shared-token
 6. Run CLI health check:
 
 ```bash
-npm run start:cli -- --token your-shared-token health
+npm run start:browterm -- --token your-shared-token health
 ```
 
 7. Execute a command in the bound browser terminal:
 
 ```bash
-npm run start:cli -- --token your-shared-token exec "echo hello"
+npm run start:browterm -- --token your-shared-token exec "echo hello"
 ```
 
 ## CLI Commands
 
 ```bash
-bt health
-bt exec [--timeout-ms N] [--json] [--request-id ID] "<command>"
-bt cancel <requestId>
+browterm health
+browterm exec [--timeout-ms N] [--json] [--request-id ID] "<command>"
+browterm cancel <requestId>
 ```
 
 Global options:

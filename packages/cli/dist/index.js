@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import WebSocket from "ws";
-import { PROTOCOL_VERSION, safeParseMessage, stringifyMessage } from "@bt/shared";
+import { PROTOCOL_VERSION, safeParseMessage, stringifyMessage } from "@browser-terminal-use/core";
 async function main() {
     const argv = process.argv.slice(2);
     if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
@@ -156,7 +156,7 @@ async function runExec(options, args) {
 async function runCancel(options, args) {
     const requestId = args[0];
     if (!requestId) {
-        throw new Error("usage: bt cancel <requestId>");
+        throw new Error("usage: browterm cancel <requestId>");
     }
     const ws = await connectCli(options);
     const payload = {
@@ -236,7 +236,7 @@ function parseExecArgs(args) {
     }
     const command = commandParts.join(" ").trim();
     if (!command) {
-        throw new Error("usage: bt exec [--timeout-ms N] [--json] [--request-id ID] <command>");
+        throw new Error("usage: browterm exec [--timeout-ms N] [--json] [--request-id ID] <command>");
     }
     return { command, timeoutMs, json, requestId };
 }
@@ -359,10 +359,10 @@ function toInt(value, fallback) {
 }
 function printHelp() {
     // eslint-disable-next-line no-console
-    console.log(`Browser Terminal CLI (bt)
+    console.log(`Browser Terminal CLI (browterm)
 
 Usage:
-  bt [--host HOST] [--port PORT] [--token TOKEN] <command>
+  browterm [--host HOST] [--port PORT] [--token TOKEN] <command>
 
 Commands:
   health

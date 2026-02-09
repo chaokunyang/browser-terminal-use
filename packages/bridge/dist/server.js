@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { URL } from "node:url";
 import { WebSocket, WebSocketServer } from "ws";
-import { PROTOCOL_VERSION, safeParseMessage, stringifyMessage } from "@bt/shared";
+import { PROTOCOL_VERSION, safeParseMessage, stringifyMessage } from "@browser-terminal-use/core";
 export class BridgeServer {
     config;
     startedAt = Date.now();

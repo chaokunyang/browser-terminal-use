@@ -20,7 +20,7 @@ npm run build
 Run daemon on localhost:
 
 ```bash
-npm run start:bridge -- --host 127.0.0.1 --port 17373 --token your-shared-token
+npm run start:browterm-daemon -- --host 127.0.0.1 --port 17373 --token your-shared-token
 ```
 
 Optional flags:
@@ -65,25 +65,25 @@ curl http://127.0.0.1:17373/v1/health
 Health check:
 
 ```bash
-npm run start:cli -- --token your-shared-token health
+npm run start:browterm -- --token your-shared-token health
 ```
 
 Execute command:
 
 ```bash
-npm run start:cli -- --token your-shared-token exec "uname -a"
+npm run start:browterm -- --token your-shared-token exec "uname -a"
 ```
 
 JSON mode:
 
 ```bash
-npm run start:cli -- --token your-shared-token exec --json "ls -la"
+npm run start:browterm -- --token your-shared-token exec --json "ls -la"
 ```
 
 Cancel running request:
 
 ```bash
-npm run start:cli -- --token your-shared-token cancel <requestId>
+npm run start:browterm -- --token your-shared-token cancel <requestId>
 ```
 
 ## 8. Expected Behavior
