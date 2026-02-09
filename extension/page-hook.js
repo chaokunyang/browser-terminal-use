@@ -231,20 +231,20 @@
 
   async function decodeData(data) {
     if (typeof data === "string") {
-      return data;
+      return maybeExtractTerminalText(data);
     }
 
     if (data instanceof ArrayBuffer) {
-      return decodeBuffer(new Uint8Array(data));
+      return maybeExtractTerminalText(decodeBuffer(new Uint8Array(data)));
     }
 
     if (data instanceof Uint8Array) {
-      return decodeBuffer(data);
+      return maybeExtractTerminalText(decodeBuffer(data));
     }
 
     if (data instanceof Blob) {
       const buffer = await data.arrayBuffer();
-      return decodeBuffer(new Uint8Array(buffer));
+      return maybeExtractTerminalText(decodeBuffer(new Uint8Array(buffer)));
     }
 
     return "";
@@ -256,6 +256,62 @@
     } catch {
       return "";
     }
+  }
+
+  function maybeExtractTerminalText(text) {
+    if (!text) {
+      return "";
+    }
+
+    const trimmed = text.trim();
+    if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) {
+      return text;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      const extracted = extractTextCandidate(parsed);
+      return extracted || text;
+    } catch {
+      return text;
+    }
+  }
+
+  function extractTextCandidate(value) {
+    if (typeof value === "string") {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      let joined = "";
+      for (const item of value) {
+        const candidate = extractTextCandidate(item);
+        if (candidate) {
+          joined += candidate;
+        }
+      }
+      return joined;
+    }
+
+    if (!value || typeof value !== "object") {
+      return "";
+    }
+
+    const preferred = ["data", "output", "stdout", "stderr", "message", "chunk", "text", "payload"];
+    for (const key of preferred) {
+      if (typeof value[key] === "string") {
+        return value[key];
+      }
+    }
+
+    for (const key of preferred) {
+      const nested = extractTextCandidate(value[key]);
+      if (nested) {
+        return nested;
+      }
+    }
+
+    return "";
   }
 
   function respond(requestId, ok, payload = null, error = null) {

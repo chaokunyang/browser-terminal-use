@@ -31,70 +31,54 @@ class MarkerParser {
     this.buffer += chunk;
     const emitted = [];
 
-    while (this.state !== "done") {
-      const idx = this.buffer.indexOf("\n");
-      if (idx < 0) {
-        this.tryInlineMarkers(emitted);
+    this.maybeTransitionToCapturing();
+
+    while (this.state === "capturing") {
+      const endIdx = this.buffer.indexOf(this.markers.end);
+      if (endIdx >= 0) {
+        this.emitCleaned(this.buffer.slice(0, endIdx), emitted);
+        this.buffer = this.buffer.slice(endIdx + this.markers.end.length);
+        this.state = "done";
         break;
       }
 
-      const line = this.buffer.slice(0, idx + 1);
-      this.buffer = this.buffer.slice(idx + 1);
-      const parsed = this.processLine(line);
-      if (parsed.length > 0) {
-        emitted.push(parsed);
-        this.output += parsed;
+      const hold = this.holdbackLength();
+      if (this.buffer.length <= hold) {
+        break;
       }
+
+      const emitLen = this.buffer.length - hold;
+      this.emitCleaned(this.buffer.slice(0, emitLen), emitted);
+      this.buffer = this.buffer.slice(emitLen);
     }
 
     return this.snapshot(emitted);
   }
 
-  processLine(line) {
-    if (this.state === "awaiting_start") {
-      const startIdx = line.indexOf(this.markers.start);
-      if (startIdx < 0) {
-        return "";
-      }
-      this.state = "capturing";
-      const after = trimSingleLeadingNewline(line.slice(startIdx + this.markers.start.length));
-      return this.stripRcMarker(after);
+  maybeTransitionToCapturing() {
+    if (this.state !== "awaiting_start") {
+      return;
     }
 
-    if (this.state !== "capturing") {
-      return "";
+    const startIdx = findStartMarkerIndex(this.buffer, this.markers.start);
+    if (startIdx < 0) {
+      this.buffer = keepPotentialStartPrefix(this.buffer, this.markers.start);
+      return;
     }
 
-    const endIdx = line.indexOf(this.markers.end);
-    if (endIdx >= 0) {
-      const before = line.slice(0, endIdx);
-      const cleaned = this.stripRcMarker(before);
-      this.state = "done";
-      return cleaned;
-    }
-
-    return this.stripRcMarker(line);
+    this.buffer = trimSingleLeadingNewline(this.buffer.slice(startIdx + this.markers.start.length));
+    this.state = "capturing";
   }
 
-  tryInlineMarkers(emitted) {
-    if (this.state !== "capturing") {
+  emitCleaned(text, emitted) {
+    if (text.length === 0) {
       return;
     }
-
-    const endIdx = this.buffer.indexOf(this.markers.end);
-    if (endIdx < 0) {
-      return;
-    }
-
-    const before = this.buffer.slice(0, endIdx);
-    const cleaned = this.stripRcMarker(before);
+    const cleaned = this.stripRcMarker(text);
     if (cleaned.length > 0) {
       emitted.push(cleaned);
       this.output += cleaned;
     }
-
-    this.buffer = this.buffer.slice(endIdx + this.markers.end.length);
-    this.state = "done";
   }
 
   stripRcMarker(text) {
@@ -107,6 +91,10 @@ class MarkerParser {
       }
       return "";
     });
+  }
+
+  holdbackLength() {
+    return Math.max(this.markers.end.length, this.markers.rcPrefix.length + 16, 32);
   }
 
   snapshot(chunks) {
@@ -222,6 +210,7 @@ async function handleExecRequest(message) {
     startedAt: Date.now(),
     timeoutMs: normalizeTimeout(message.timeoutMs),
     timeoutTimer: null,
+    markerStartTimer: null,
     domFallbackTimer: null,
     wsObserved: false
   };
@@ -242,7 +231,24 @@ async function handleExecRequest(message) {
     }
   }, 1500);
 
-  const sent = await sendInputToTerminal(`${wrappedCommand}\n`);
+  const markerWaitMs = Math.min(15000, Math.max(4000, Math.floor(activeExecution.timeoutMs / 3)));
+  activeExecution.markerStartTimer = setTimeout(() => {
+    if (!activeExecution || activeExecution.requestId !== message.requestId || activeExecution.source) {
+      return;
+    }
+
+    emitExecEvent("exec_error", {
+      requestId: message.requestId,
+      message:
+        "no command markers observed in terminal output; output capture may be incompatible with this terminal page"
+    });
+    sendControlC().catch(() => {
+      // ignored
+    });
+    cleanupExecution();
+  }, markerWaitMs);
+
+  const sent = await sendInputToTerminal(wrappedCommand);
   if (!sent) {
     emitExecEvent("exec_error", {
       requestId: message.requestId,
@@ -279,6 +285,14 @@ function handleExecutionChunk(source, chunk) {
     return;
   }
 
+  let normalizedChunk = chunk;
+  if (source === "ws") {
+    normalizedChunk = sanitizeWsChunk(chunk);
+    if (!normalizedChunk) {
+      return;
+    }
+  }
+
   if (source === "ws") {
     activeExecution.wsObserved = true;
   }
@@ -288,10 +302,11 @@ function handleExecutionChunk(source, chunk) {
   }
 
   const parser = activeExecution.parserBySource[source];
-  const result = parser.feed(chunk);
+  const result = parser.feed(normalizedChunk);
 
   if (!activeExecution.source && result.started) {
     activeExecution.source = source;
+    clearMarkerStartTimer();
     if (source === "ws") {
       stopDomObserver();
     }
@@ -348,6 +363,9 @@ function cleanupExecution() {
   if (activeExecution.timeoutTimer) {
     clearTimeout(activeExecution.timeoutTimer);
   }
+  if (activeExecution.markerStartTimer) {
+    clearTimeout(activeExecution.markerStartTimer);
+  }
   if (activeExecution.domFallbackTimer) {
     clearTimeout(activeExecution.domFallbackTimer);
   }
@@ -355,22 +373,79 @@ function cleanupExecution() {
   activeExecution = null;
 }
 
-async function sendInputToTerminal(text) {
-  const bySocket = await sendPageRequest("send-input", { text }, 1500).catch(() => null);
+function clearMarkerStartTimer() {
+  if (!activeExecution || !activeExecution.markerStartTimer) {
+    return;
+  }
+  clearTimeout(activeExecution.markerStartTimer);
+  activeExecution.markerStartTimer = null;
+}
+
+async function sendInputToTerminal(commandText) {
+  const trusted = await sendTrustedInput(commandText);
+  if (trusted) {
+    const enterOk = await sendTrustedEnter();
+    if (enterOk) {
+      return true;
+    }
+  }
+
+  const bySocket = await sendPageRequest("send-input", { text: `${commandText}\n` }, 1500).catch(
+    () => null
+  );
   if (bySocket?.ok) {
     return true;
   }
 
-  return sendInputViaKeyboard(text);
+  return sendInputViaKeyboard(`${commandText}\n`);
 }
 
 async function sendControlC() {
+  const trusted = await sendTrustedCtrlC();
+  if (trusted) {
+    return true;
+  }
+
   const bySocket = await sendPageRequest("send-ctrl-c", {}, 1000).catch(() => null);
   if (bySocket?.ok) {
     return true;
   }
 
   return sendCtrlCViaKeyboard();
+}
+
+async function sendTrustedInput(text) {
+  try {
+    const result = await chrome.runtime.sendMessage({
+      type: "bt_trusted_input",
+      text
+    });
+    return Boolean(result?.ok);
+  } catch {
+    return false;
+  }
+}
+
+async function sendTrustedEnter() {
+  try {
+    const result = await chrome.runtime.sendMessage({
+      type: "bt_trusted_enter"
+    });
+    return Boolean(result?.ok);
+  } catch {
+    return false;
+  }
+}
+
+async function sendTrustedCtrlC() {
+  try {
+    const result = await chrome.runtime.sendMessage({
+      type: "bt_trusted_ctrl_c"
+    });
+    return Boolean(result?.ok);
+  } catch {
+    return false;
+  }
 }
 
 function sendPageRequest(action, payload, timeoutMs) {
@@ -659,13 +734,14 @@ function buildMarkers(requestId) {
 
 function buildWrappedCommand(command, markers) {
   const normalized = String(command || "").trimEnd();
+  const body = normalized.length > 0 ? normalized : ":";
   return [
     `printf '${markers.start}\\n'`,
-    normalized.length > 0 ? normalized : ":",
+    `( ${body} )`,
     "__bt_rc=$?",
     `printf '${markers.rcPrefix}%s\\n' \"$__bt_rc\"`,
     `printf '${markers.end}\\n'`
-  ].join("\n");
+  ].join("; ");
 }
 
 function trimSingleLeadingNewline(input) {
@@ -676,6 +752,81 @@ function trimSingleLeadingNewline(input) {
     return input.slice(1);
   }
   return input;
+}
+
+function sanitizeWsChunk(chunk) {
+  if (typeof chunk !== "string" || chunk.length === 0) {
+    return "";
+  }
+
+  if (!looksLikeRpcNoise(chunk)) {
+    return chunk;
+  }
+
+  const byPrefixRegex = chunk.replace(
+    /[^\n\r]*RPCService[^\n\r]*ITerminalServicePath:onMessage[^\n\r]*?(?:[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F]+)+/g,
+    ""
+  );
+  if (byPrefixRegex !== chunk) {
+    return byPrefixRegex;
+  }
+
+  const marker = "ITerminalServicePath:onMessage";
+  const idx = chunk.lastIndexOf(marker);
+  if (idx >= 0) {
+    const tail = chunk.slice(idx + marker.length);
+    const parts = tail
+      .split(/[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F]+/g)
+      .map((item) => item.trimStart())
+      .filter(Boolean);
+
+    for (const part of parts) {
+      if (/RPCService|ITerminalServicePath:onMessage/.test(part)) {
+        continue;
+      }
+      if (/^\"?[A-Za-z0-9_-]+\|[A-Za-z0-9_-]+\"?$/.test(part)) {
+        continue;
+      }
+      return part;
+    }
+  }
+
+  return chunk.replace(/[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F]+/g, "");
+}
+
+function looksLikeRpcNoise(text) {
+  return (
+    typeof text === "string" &&
+    (text.includes("RPCService") || text.includes("ITerminalServicePath:onMessage"))
+  );
+}
+
+function findStartMarkerIndex(buffer, marker) {
+  let from = 0;
+  while (true) {
+    const idx = buffer.indexOf(marker, from);
+    if (idx < 0) {
+      return -1;
+    }
+
+    const beforeOk = idx === 0 || buffer[idx - 1] === "\n" || buffer[idx - 1] === "\r";
+    if (!beforeOk) {
+      from = idx + 1;
+      continue;
+    }
+    return idx;
+  }
+}
+
+function keepPotentialStartPrefix(buffer, marker) {
+  const max = Math.min(marker.length - 1, buffer.length);
+  for (let size = max; size > 0; size -= 1) {
+    const suffix = buffer.slice(buffer.length - size);
+    if (marker.startsWith(suffix)) {
+      return suffix;
+    }
+  }
+  return "";
 }
 
 function injectPageHook() {

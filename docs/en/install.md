@@ -56,8 +56,9 @@ curl http://127.0.0.1:17373/v1/health
 ## 6. Bind Terminal Tab
 
 1. Open your web terminal page in Chrome.
-2. Click the extension icon once.
-3. This sets the current tab as the preferred execution target.
+2. Refresh that tab once after loading/updating the extension.
+3. Click the extension icon once.
+4. This sets the current tab as the preferred execution target.
 
 ## 7. Use CLI
 
@@ -101,11 +102,16 @@ npm run start:cli -- --token your-shared-token cancel <requestId>
 ### `no terminal tab available`
 - Open terminal tab.
 - Click extension icon to bind tab.
+- Refresh the terminal tab once, then retry.
 
 ### Command hangs or no output
 - Terminal may use unsupported websocket protocol/encoding.
 - Try rebinding tab and rerun.
 - Enable daemon `--debug` and inspect logs.
+
+### Chrome debugger permission prompt appears
+- The extension now uses Chrome Debugger API for trusted input injection.
+- On first use, allow the prompt to enable reliable command delivery.
 
 ### Output contains marker fragments
 - This indicates parser could not cleanly isolate marker boundaries from terminal stream framing.

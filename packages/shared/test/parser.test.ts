@@ -37,4 +37,36 @@ describe("marker parser", () => {
     expect(parser.getExitCode()).toBe(0);
     expect(parser.getOutput()).toBe("abc");
   });
+
+  it("captures markers when stream text starts directly with marker", () => {
+    const markers = buildMarkers("json-case");
+    const parser = new MarkerParser(markers);
+
+    const first = parser.feed(`${markers.start}hello `);
+    expect(first.started).toBe(true);
+    expect(first.completed).toBe(false);
+
+    const second = parser.feed(`world${markers.rcPrefix}0${markers.end}`);
+    expect(second.completed).toBe(true);
+    expect(parser.getExitCode()).toBe(0);
+    expect(parser.getOutput()).toContain("hello world");
+  });
+
+  it("ignores echoed command text that contains marker literals", () => {
+    const markers = buildMarkers("echo-case");
+    const parser = new MarkerParser(markers);
+
+    parser.feed(
+      `$printf '${markers.start}\\\\n'; ( ls ); __bt_rc=$?; printf '${markers.rcPrefix}%s\\\\n' \"$__bt_rc\"; printf '${markers.end}\\\\n'\\n`
+    );
+
+    const result = parser.feed(
+      `${markers.start}\nfile-a\n${markers.rcPrefix}0\n${markers.end}\n`
+    );
+
+    expect(result.completed).toBe(true);
+    expect(parser.getExitCode()).toBe(0);
+    expect(parser.getOutput()).toContain("file-a");
+    expect(parser.getOutput()).not.toContain("__bt_rc");
+  });
 });

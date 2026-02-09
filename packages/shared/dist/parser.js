@@ -8,70 +8,55 @@ export class MarkerParser {
         this.markers = markers;
     }
     feed(chunk) {
-        if (this.getState() === "done") {
+        if (this.state === "done") {
             return this.snapshot([]);
         }
         this.buffer += chunk;
         const emitted = [];
-        while (true) {
-            if (this.getState() === "done") {
+        this.maybeTransitionToCapturing();
+        while (this.state === "capturing") {
+            const endIdx = this.buffer.indexOf(this.markers.end);
+            if (endIdx >= 0) {
+                this.emitCleaned(this.buffer.slice(0, endIdx), emitted);
+                this.buffer = this.buffer.slice(endIdx + this.markers.end.length);
+                this.state = "done";
                 break;
             }
-            const newlineIdx = this.buffer.indexOf("\n");
-            if (newlineIdx < 0) {
-                if (this.state === "capturing") {
-                    this.tryInlineMarkers(emitted);
-                }
+            const hold = this.holdbackLength();
+            if (this.buffer.length <= hold) {
                 break;
             }
-            const lineWithNl = this.buffer.slice(0, newlineIdx + 1);
-            this.buffer = this.buffer.slice(newlineIdx + 1);
-            const maybeChunk = this.processLine(lineWithNl);
-            if (maybeChunk.length > 0) {
-                emitted.push(maybeChunk);
-                this.captured += maybeChunk;
-            }
+            const emitLen = this.buffer.length - hold;
+            this.emitCleaned(this.buffer.slice(0, emitLen), emitted);
+            this.buffer = this.buffer.slice(emitLen);
         }
         return this.snapshot(emitted);
     }
-    tryInlineMarkers(emitted) {
-        if (this.state !== "capturing") {
+    maybeTransitionToCapturing() {
+        if (this.state !== "awaiting_start") {
             return;
         }
-        const endIdx = this.buffer.indexOf(this.markers.end);
-        if (endIdx < 0) {
-            return;
-        }
-        const before = this.buffer.slice(0, endIdx);
-        const cleaned = this.stripRcMarker(before);
-        if (cleaned.length > 0) {
-            emitted.push(cleaned);
-            this.captured += cleaned;
-        }
-        this.buffer = this.buffer.slice(endIdx + this.markers.end.length);
-        this.state = "done";
-    }
-    processLine(rawLine) {
-        if (this.state === "awaiting_start") {
-            const startIdx = rawLine.indexOf(this.markers.start);
-            if (startIdx < 0) {
-                return "";
+        const startIdx = this.buffer.indexOf(this.markers.start);
+        if (startIdx < 0) {
+            const keep = Math.max(this.markers.start.length - 1, 0);
+            if (this.buffer.length > keep) {
+                this.buffer = this.buffer.slice(this.buffer.length - keep);
             }
-            this.state = "capturing";
-            const after = trimSingleLeadingNewline(rawLine.slice(startIdx + this.markers.start.length));
-            return this.stripRcMarker(after);
+            return;
         }
-        if (this.state !== "capturing") {
-            return "";
+        this.buffer = trimSingleLeadingNewline(this.buffer.slice(startIdx + this.markers.start.length));
+        this.state = "capturing";
+    }
+    emitCleaned(input, emitted) {
+        if (input.length === 0) {
+            return;
         }
-        const endIdx = rawLine.indexOf(this.markers.end);
-        if (endIdx >= 0) {
-            const before = rawLine.slice(0, endIdx);
-            const cleaned = this.stripRcMarker(before);
-            this.state = "done";
-            return cleaned;
+        const cleaned = this.stripRcMarker(input);
+        if (cleaned.length === 0) {
+            return;
         }
-        return this.stripRcMarker(rawLine);
+        emitted.push(cleaned);
+        this.captured += cleaned;
     }
     stripRcMarker(input) {
         const escaped = escapeRegex(this.markers.rcPrefix);
@@ -83,6 +68,9 @@ export class MarkerParser {
             }
             return "";
         });
+    }
+    holdbackLength() {
+        return Math.max(this.markers.end.length, this.markers.rcPrefix.length + 16, 32);
     }
     snapshot(chunks) {
         return {

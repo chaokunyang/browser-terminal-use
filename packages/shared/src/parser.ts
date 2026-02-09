@@ -21,82 +21,66 @@ export class MarkerParser {
   }
 
   feed(chunk: string): MarkerParseFeedResult {
-    if (this.getState() === "done") {
+    if (this.state === "done") {
       return this.snapshot([]);
     }
 
     this.buffer += chunk;
     const emitted: string[] = [];
 
-    while (true) {
-      if (this.getState() === "done") {
-        break;
-      }
-      const newlineIdx = this.buffer.indexOf("\n");
-      if (newlineIdx < 0) {
-        if (this.state === "capturing") {
-          this.tryInlineMarkers(emitted);
-        }
+    this.maybeTransitionToCapturing();
+
+    while (this.state === "capturing") {
+      const endIdx = this.buffer.indexOf(this.markers.end);
+      if (endIdx >= 0) {
+        this.emitCleaned(this.buffer.slice(0, endIdx), emitted);
+        this.buffer = this.buffer.slice(endIdx + this.markers.end.length);
+        this.state = "done";
         break;
       }
 
-      const lineWithNl = this.buffer.slice(0, newlineIdx + 1);
-      this.buffer = this.buffer.slice(newlineIdx + 1);
-      const maybeChunk = this.processLine(lineWithNl);
-      if (maybeChunk.length > 0) {
-        emitted.push(maybeChunk);
-        this.captured += maybeChunk;
+      const hold = this.holdbackLength();
+      if (this.buffer.length <= hold) {
+        break;
       }
+
+      const emitLen = this.buffer.length - hold;
+      this.emitCleaned(this.buffer.slice(0, emitLen), emitted);
+      this.buffer = this.buffer.slice(emitLen);
     }
 
     return this.snapshot(emitted);
   }
 
-  private tryInlineMarkers(emitted: string[]): void {
-    if (this.state !== "capturing") {
+  private maybeTransitionToCapturing(): void {
+    if (this.state !== "awaiting_start") {
       return;
     }
 
-    const endIdx = this.buffer.indexOf(this.markers.end);
-    if (endIdx < 0) {
+    const startIdx = findStartMarkerIndex(this.buffer, this.markers.start);
+    if (startIdx < 0) {
+      this.buffer = keepPotentialStartPrefix(this.buffer, this.markers.start);
       return;
     }
 
-    const before = this.buffer.slice(0, endIdx);
-    const cleaned = this.stripRcMarker(before);
-    if (cleaned.length > 0) {
-      emitted.push(cleaned);
-      this.captured += cleaned;
-    }
-
-    this.buffer = this.buffer.slice(endIdx + this.markers.end.length);
-    this.state = "done";
+    this.buffer = trimSingleLeadingNewline(
+      this.buffer.slice(startIdx + this.markers.start.length)
+    );
+    this.state = "capturing";
   }
 
-  private processLine(rawLine: string): string {
-    if (this.state === "awaiting_start") {
-      const startIdx = rawLine.indexOf(this.markers.start);
-      if (startIdx < 0) {
-        return "";
-      }
-      this.state = "capturing";
-      const after = trimSingleLeadingNewline(rawLine.slice(startIdx + this.markers.start.length));
-      return this.stripRcMarker(after);
+  private emitCleaned(input: string, emitted: string[]): void {
+    if (input.length === 0) {
+      return;
     }
 
-    if (this.state !== "capturing") {
-      return "";
+    const cleaned = this.stripRcMarker(input);
+    if (cleaned.length === 0) {
+      return;
     }
 
-    const endIdx = rawLine.indexOf(this.markers.end);
-    if (endIdx >= 0) {
-      const before = rawLine.slice(0, endIdx);
-      const cleaned = this.stripRcMarker(before);
-      this.state = "done";
-      return cleaned;
-    }
-
-    return this.stripRcMarker(rawLine);
+    emitted.push(cleaned);
+    this.captured += cleaned;
   }
 
   private stripRcMarker(input: string): string {
@@ -110,6 +94,10 @@ export class MarkerParser {
       }
       return "";
     });
+  }
+
+  private holdbackLength(): number {
+    return Math.max(this.markers.end.length, this.markers.rcPrefix.length + 16, 32);
   }
 
   private snapshot(chunks: string[]): MarkerParseFeedResult {
@@ -146,4 +134,32 @@ function trimSingleLeadingNewline(input: string): string {
     return input.slice(1);
   }
   return input;
+}
+
+function findStartMarkerIndex(buffer: string, marker: string): number {
+  let from = 0;
+  while (true) {
+    const idx = buffer.indexOf(marker, from);
+    if (idx < 0) {
+      return -1;
+    }
+
+    const beforeOk = idx === 0 || buffer[idx - 1] === "\n" || buffer[idx - 1] === "\r";
+    if (!beforeOk) {
+      from = idx + 1;
+      continue;
+    }
+    return idx;
+  }
+}
+
+function keepPotentialStartPrefix(buffer: string, marker: string): string {
+  const max = Math.min(marker.length - 1, buffer.length);
+  for (let size = max; size > 0; size -= 1) {
+    const suffix = buffer.slice(buffer.length - size);
+    if (marker.startsWith(suffix)) {
+      return suffix;
+    }
+  }
+  return "";
 }

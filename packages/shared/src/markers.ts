@@ -21,11 +21,12 @@ export function buildMarkers(requestId: string): Markers {
 
 export function buildWrappedCommand(command: string, markers: Markers): string {
   const normalized = command.trimEnd();
+  const body = normalized.length > 0 ? normalized : ":";
   return [
     `printf '${markers.start}\\n'`,
-    normalized.length > 0 ? normalized : ":",
+    `( ${body} )`,
     "__bt_rc=$?",
     `printf '${markers.rcPrefix}%s\\n' \"$__bt_rc\"`,
     `printf '${markers.end}\\n'`
-  ].join("\n");
+  ].join("; ");
 }

@@ -14,9 +14,10 @@ export declare class MarkerParser {
     private captured;
     constructor(markers: Markers);
     feed(chunk: string): MarkerParseFeedResult;
-    private tryInlineMarkers;
-    private processLine;
+    private maybeTransitionToCapturing;
+    private emitCleaned;
     private stripRcMarker;
+    private holdbackLength;
     private snapshot;
     getState(): ParseState;
     getExitCode(): number | null;

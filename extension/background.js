@@ -12,6 +12,7 @@ let statusInterval = null;
 
 const terminalTabs = new Map();
 const requestToTab = new Map();
+const debuggerAttachedTabs = new Set();
 
 bootstrap().catch((error) => {
   console.error("[bt-background] bootstrap failed", error);
@@ -59,11 +60,56 @@ function setupChromeEventHandlers() {
       return true;
     }
 
+    if (message.type === "bt_trusted_input") {
+      const tabId = sender.tab?.id;
+      if (typeof tabId !== "number" || typeof message.text !== "string") {
+        sendResponse({ ok: false, message: "invalid trusted input request" });
+        return true;
+      }
+
+      sendTrustedInput(tabId, message.text)
+        .then(() => sendResponse({ ok: true }))
+        .catch((error) => sendResponse({ ok: false, message: String(error) }));
+      return true;
+    }
+
+    if (message.type === "bt_trusted_ctrl_c") {
+      const tabId = sender.tab?.id;
+      if (typeof tabId !== "number") {
+        sendResponse({ ok: false, message: "invalid trusted ctrl-c request" });
+        return true;
+      }
+
+      sendTrustedCtrlC(tabId)
+        .then(() => sendResponse({ ok: true }))
+        .catch((error) => sendResponse({ ok: false, message: String(error) }));
+      return true;
+    }
+
+    if (message.type === "bt_trusted_enter") {
+      const tabId = sender.tab?.id;
+      if (typeof tabId !== "number") {
+        sendResponse({ ok: false, message: "invalid trusted enter request" });
+        return true;
+      }
+
+      sendTrustedEnter(tabId)
+        .then(() => sendResponse({ ok: true }))
+        .catch((error) => sendResponse({ ok: false, message: String(error) }));
+      return true;
+    }
+
     return false;
   });
 
   chrome.tabs.onRemoved.addListener((tabId) => {
     terminalTabs.delete(tabId);
+    if (debuggerAttachedTabs.has(tabId)) {
+      chrome.debugger.detach({ tabId }).catch(() => {
+        // ignored
+      });
+      debuggerAttachedTabs.delete(tabId);
+    }
     sendTerminalStatus();
   });
 
@@ -116,6 +162,19 @@ function setupChromeEventHandlers() {
     if (statusInterval) {
       clearInterval(statusInterval);
       statusInterval = null;
+    }
+
+    for (const tabId of debuggerAttachedTabs) {
+      chrome.debugger.detach({ tabId }).catch(() => {
+        // ignored
+      });
+    }
+    debuggerAttachedTabs.clear();
+  });
+
+  chrome.debugger.onDetach.addListener((source) => {
+    if (typeof source.tabId === "number") {
+      debuggerAttachedTabs.delete(source.tabId);
     }
   });
 }
@@ -218,7 +277,8 @@ async function handleExecRequestFromBridge(message) {
     sendBridgeMessage({
       type: "exec_error",
       requestId: message.requestId,
-      message: "no terminal tab available. Bind a tab by clicking the extension action."
+      message:
+        "no target tab available. Keep the terminal tab open, focus it, then click the extension action to bind."
     });
     return;
   }
@@ -226,7 +286,7 @@ async function handleExecRequestFromBridge(message) {
   requestToTab.set(message.requestId, targetTabId);
 
   try {
-    const response = await chrome.tabs.sendMessage(targetTabId, {
+    const response = await sendMessageWithInjection(targetTabId, {
       type: "bt_exec_request",
       requestId: message.requestId,
       command: message.command,
@@ -262,7 +322,7 @@ async function handleExecCancelFromBridge(message) {
   }
 
   try {
-    await chrome.tabs.sendMessage(tabId, {
+    await sendMessageWithInjection(tabId, {
       type: "bt_exec_cancel",
       requestId: message.requestId,
       reason: message.reason ?? "cancel_requested"
@@ -279,14 +339,15 @@ async function handleExecCancelFromBridge(message) {
 async function pickTerminalTab() {
   const { boundTabId } = await chrome.storage.local.get(["boundTabId"]);
   if (typeof boundTabId === "number") {
-    const bound = terminalTabs.get(boundTabId);
-    if (bound && Date.now() - bound.lastSeenAt < 30000) {
+    const bound = await getTabById(boundTabId);
+    if (bound) {
       return boundTabId;
     }
+    await chrome.storage.local.set({ boundTabId: null });
   }
 
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (active?.id && terminalTabs.has(active.id)) {
+  if (typeof active?.id === "number") {
     return active.id;
   }
 
@@ -358,6 +419,98 @@ function normalizeBridgeUrl(raw) {
 function safeJsonParse(input) {
   try {
     return JSON.parse(typeof input === "string" ? input : String(input));
+  } catch {
+    return null;
+  }
+}
+
+async function sendTrustedInput(tabId, text) {
+  if (!text) {
+    return;
+  }
+
+  await ensureDebuggerAttached(tabId);
+  await chrome.debugger.sendCommand({ tabId }, "Input.insertText", { text });
+}
+
+async function sendTrustedCtrlC(tabId) {
+  await ensureDebuggerAttached(tabId);
+
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+    type: "rawKeyDown",
+    modifiers: 2,
+    windowsVirtualKeyCode: 67,
+    code: "KeyC",
+    key: "c"
+  });
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+    type: "keyUp",
+    modifiers: 2,
+    windowsVirtualKeyCode: 67,
+    code: "KeyC",
+    key: "c"
+  });
+}
+
+async function sendTrustedEnter(tabId) {
+  await ensureDebuggerAttached(tabId);
+
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+    type: "rawKeyDown",
+    windowsVirtualKeyCode: 13,
+    code: "Enter",
+    key: "Enter"
+  });
+  await chrome.debugger.sendCommand({ tabId }, "Input.dispatchKeyEvent", {
+    type: "keyUp",
+    windowsVirtualKeyCode: 13,
+    code: "Enter",
+    key: "Enter"
+  });
+}
+
+async function ensureDebuggerAttached(tabId) {
+  if (debuggerAttachedTabs.has(tabId)) {
+    return;
+  }
+
+  try {
+    await chrome.debugger.attach({ tabId }, "1.3");
+    debuggerAttachedTabs.add(tabId);
+  } catch (error) {
+    const text = String(error);
+    if (text.includes("Another debugger is already attached")) {
+      throw new Error("tab already has another debugger attached");
+    }
+    throw error;
+  }
+}
+
+async function sendMessageWithInjection(tabId, payload) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, payload);
+  } catch (error) {
+    if (!isMissingReceiverError(error)) {
+      throw error;
+    }
+
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content-script.js"]
+    });
+
+    return chrome.tabs.sendMessage(tabId, payload);
+  }
+}
+
+function isMissingReceiverError(error) {
+  const text = String(error ?? "");
+  return text.includes("Receiving end does not exist");
+}
+
+async function getTabById(tabId) {
+  try {
+    return await chrome.tabs.get(tabId);
   } catch {
     return null;
   }
