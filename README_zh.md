@@ -1,5 +1,9 @@
 # Browser Terminal Use（中文）
 
+<p align="center">
+  <img src="assets/logo/browser-terminal-use-logo.svg" alt="Browser Terminal Use 标志" width="860" />
+</p>
+
 这是一个用于浏览器网页终端自动化的工具集：由 Chrome 扩展、本地守护进程和 CLI 组成，可在本地终端下发命令到浏览器终端，并获得实时输出与退出码。
 
 English README: [`README.md`](README.md)
@@ -23,6 +27,7 @@ English README: [`README.md`](README.md)
 - `packages/bridge`：WebSocket 守护进程与请求队列。
 - `packages/cli`：本地 CLI（`browterm`）。
 - `extension`：Chrome 扩展（MV3）。
+- `assets/logo`：品牌标识资源（SVG 与扩展图标源文件）。
 - `assets/diagrams`：架构与运行流程图。
 - `DEVELOPMENT_zh.md`：仓库开发命令说明。
 

@@ -1,5 +1,9 @@
 # Browser Terminal Use
 
+<p align="center">
+  <img src="assets/logo/browser-terminal-use-logo.svg" alt="Browser Terminal Use logo" width="860" />
+</p>
+
 Chrome extension + local daemon + CLI for executing commands in a browser-hosted terminal and returning structured output + exit codes to your local macOS terminal.
 
 中文文档：[`README_zh.md`](README_zh.md)
@@ -23,6 +27,7 @@ Chrome extension + local daemon + CLI for executing commands in a browser-hosted
 - `packages/bridge`: websocket daemon and request queue.
 - `packages/cli`: local CLI (`browterm`).
 - `extension`: Chrome extension (MV3).
+- `assets/logo`: brand logo assets (SVG + extension icon source).
 - `assets/diagrams`: architecture and runtime flow diagrams.
 - `DEVELOPMENT.md`: repository development commands.
 

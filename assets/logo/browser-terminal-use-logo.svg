@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 340" role="img" aria-labelledby="title desc">
+  <title id="title">Browser Terminal Use</title>
+  <desc id="desc">Brand logo for Browser Terminal Use with gradient terminal icon and wordmark.</desc>
+  <defs>
+    <linearGradient id="wordmark" x1="360" y1="70" x2="1110" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#66f6dd"/>
+      <stop offset="0.5" stop-color="#4ecfd5"/>
+      <stop offset="1" stop-color="#ff9543"/>
+    </linearGradient>
+    <linearGradient id="muted" x1="366" y1="248" x2="970" y2="248" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2f4e63"/>
+      <stop offset="1" stop-color="#3c6179"/>
+    </linearGradient>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#05131f" flood-opacity="0.32"/>
+    </filter>
+    <linearGradient id="panel" x1="36" y1="24" x2="276" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#10384e"/>
+      <stop offset="1" stop-color="#0a1824"/>
+    </linearGradient>
+    <linearGradient id="panelStroke" x1="48" y1="28" x2="264" y2="292" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#67f7de"/>
+      <stop offset="0.6" stop-color="#42c7cc"/>
+      <stop offset="1" stop-color="#ff9644"/>
+    </linearGradient>
+    <linearGradient id="terminal" x1="68" y1="74" x2="242" y2="232" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#11283b"/>
+      <stop offset="1" stop-color="#0a1829"/>
+    </linearGradient>
+    <linearGradient id="glyph" x1="96" y1="128" x2="212" y2="222" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#80fae2"/>
+      <stop offset="1" stop-color="#ffab56"/>
+    </linearGradient>
+  </defs>
+
+  <g filter="url(#softGlow)">
+    <rect x="24" y="24" width="264" height="264" rx="68" fill="url(#panel)" stroke="url(#panelStroke)" stroke-width="8"/>
+    <rect x="56" y="64" width="200" height="176" rx="30" fill="url(#terminal)" stroke="#59e7d9" stroke-opacity="0.34" stroke-width="3"/>
+    <circle cx="78" cy="86" r="6" fill="#2a4d68"/>
+    <circle cx="96" cy="86" r="6" fill="#2a4d68"/>
+    <circle cx="114" cy="86" r="6" fill="#2a4d68"/>
+    <path d="M100 126 L146 164 L100 202" fill="none" stroke="url(#glyph)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="158" y="188" width="62" height="14" rx="7" fill="url(#glyph)"/>
+  </g>
+
+  <text x="344" y="145" fill="url(#wordmark)" font-size="78" font-weight="780" letter-spacing="0.3" font-family="Avenir Next, Segoe UI, Helvetica Neue, Arial, sans-serif">Browser Terminal Use</text>
+  <text x="344" y="212" fill="url(#muted)" font-size="30" font-weight="560" letter-spacing="1.5" font-family="Avenir Next, Segoe UI, Helvetica Neue, Arial, sans-serif">Chrome extension + local daemon + CLI</text>
+  <path d="M344 238 H1176" stroke="url(#wordmark)" stroke-opacity="0.34" stroke-width="3" stroke-linecap="round"/>
+</svg>

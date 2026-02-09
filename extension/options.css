@@ -29,6 +29,24 @@ h2 {
   margin-top: 0;
 }
 
+h1 {
+  margin: 0;
+}
+
+.brand-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.brand-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  box-shadow: 0 6px 14px rgba(13, 47, 68, 0.22);
+}
+
 form {
   display: grid;
   gap: 10px;

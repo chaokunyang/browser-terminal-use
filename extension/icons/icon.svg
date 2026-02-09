@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Browser Terminal Use Icon</title>
+  <desc id="desc">Rounded terminal emblem with command chevron and cursor.</desc>
+  <defs>
+    <linearGradient id="panel" x1="68" y1="48" x2="454" y2="470" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f3347"/>
+      <stop offset="1" stop-color="#09151f"/>
+    </linearGradient>
+    <linearGradient id="panelStroke" x1="76" y1="64" x2="440" y2="456" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#61f6da"/>
+      <stop offset="0.55" stop-color="#37c6c9"/>
+      <stop offset="1" stop-color="#ff8f3d"/>
+    </linearGradient>
+    <linearGradient id="terminal" x1="98" y1="108" x2="412" y2="356" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#11273a"/>
+      <stop offset="1" stop-color="#0b1a2b"/>
+    </linearGradient>
+    <linearGradient id="glyph" x1="154" y1="202" x2="350" y2="350" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7efae1"/>
+      <stop offset="0.5" stop-color="#55dfe2"/>
+      <stop offset="1" stop-color="#ffaf58"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#05131f" flood-opacity="0.48"/>
+    </filter>
+  </defs>
+
+  <rect x="40" y="40" width="432" height="432" rx="112" fill="url(#panel)" stroke="url(#panelStroke)" stroke-width="12" filter="url(#shadow)"/>
+  <rect x="90" y="104" width="332" height="292" rx="48" fill="url(#terminal)" stroke="#59e8d9" stroke-opacity="0.32" stroke-width="4"/>
+
+  <circle cx="126" cy="138" r="10" fill="#2a4c67"/>
+  <circle cx="154" cy="138" r="10" fill="#2a4c67"/>
+  <circle cx="182" cy="138" r="10" fill="#2a4c67"/>
+
+  <path d="M166 214 L246 276 L166 338" fill="none" stroke="url(#glyph)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="268" y="322" width="102" height="24" rx="12" fill="url(#glyph)"/>
+
+  <path d="M100 374 C160 432 262 454 350 426 C398 411 427 388 451 352" fill="none" stroke="#67ecd9" stroke-opacity="0.55" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="452" cy="352" r="9" fill="#ff9d49"/>
+</svg>
