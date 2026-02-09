@@ -24,6 +24,7 @@ English README: [`README.md`](README.md)
 - `packages/cli`：本地 CLI（`browterm`）。
 - `extension`：Chrome 扩展（MV3）。
 - `assets/diagrams`：架构与运行流程图。
+- `DEVELOPMENT_zh.md`：仓库开发命令说明。
 
 ## 系统运行流程设计
 
@@ -55,13 +56,10 @@ English README: [`README.md`](README.md)
 2. Google Chrome（需要开启开发者模式以加载本地扩展）。
 3. 可访问目标网页终端（Browser Terminal）页面。
 
-### 2. 构建项目
-
-在仓库根目录执行：
+### 2. 安装 CLI 和守护进程
 
 ```bash
-npm install
-npm run build
+npm install -g @browser-terminal-use/bridge @browser-terminal-use/cli
 ```
 
 ### 3. 启动本地 Bridge 守护进程
@@ -69,7 +67,7 @@ npm run build
 在本机 `localhost` 启动守护进程：
 
 ```bash
-npm run start:browterm-daemon -- --host 127.0.0.1 --port 17373 --token your-shared-token
+browterm-daemon --host 127.0.0.1 --port 17373 --token your-shared-token
 ```
 
 可选参数：
@@ -114,25 +112,25 @@ curl http://127.0.0.1:17373/v1/health
 健康检查：
 
 ```bash
-npm run start:browterm -- --token your-shared-token health
+browterm --token your-shared-token health
 ```
 
 执行命令：
 
 ```bash
-npm run start:browterm -- --token your-shared-token exec "uname -a"
+browterm --token your-shared-token exec "uname -a"
 ```
 
 JSON 输出模式：
 
 ```bash
-npm run start:browterm -- --token your-shared-token exec --json "ls -la"
+browterm --token your-shared-token exec --json "ls -la"
 ```
 
 取消运行中的请求：
 
 ```bash
-npm run start:browterm -- --token your-shared-token cancel <requestId>
+browterm --token your-shared-token cancel <requestId>
 ```
 
 ### 8. 预期行为
@@ -211,8 +209,6 @@ browterm cancel <requestId>
 3. 跨域 iframe 终端在部分页面约束下可观测性会下降。
 4. 当前模型以“命令执行”为主，不是完整 PTY 镜像，交互式 TUI 支持有限。
 
-## 验证命令
+## 开发相关
 
-- 构建：`npm run build`
-- 测试：`npm run test`
-- 类型检查：`npm run lint`
+仓库内构建/测试/运行命令请看 `DEVELOPMENT_zh.md`。

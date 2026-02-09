@@ -14,7 +14,7 @@
     "lint": "npm run build --workspace @browser-terminal-use/core && tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@browser-terminal-use/core": "file:../core",
+    "@browser-terminal-use/core": "^0.1.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

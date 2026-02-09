@@ -1,0 +1,72 @@
+name: Release Packages
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all workspaces
+        run: npm run build
+
+      - name: Update versions from tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: ${GITHUB_REF_NAME}"
+            echo "Expected format: v<major>.<minor>.<patch>"
+            exit 1
+          fi
+
+          npm pkg set version="$VERSION"
+          npm pkg set version="$VERSION" --workspace @browser-terminal-use/core
+          npm pkg set version="$VERSION" --workspace @browser-terminal-use/bridge
+          npm pkg set version="$VERSION" --workspace @browser-terminal-use/cli
+
+          npm pkg set dependencies."@browser-terminal-use/core"="^$VERSION" --workspace @browser-terminal-use/bridge
+          npm pkg set dependencies."@browser-terminal-use/core"="^$VERSION" --workspace @browser-terminal-use/cli
+
+          echo "Release version: $VERSION"
+          npm pkg get version --workspace @browser-terminal-use/core
+          npm pkg get version --workspace @browser-terminal-use/bridge
+          npm pkg get version --workspace @browser-terminal-use/cli
+
+      - name: Publish @browser-terminal-use/core
+        working-directory: packages/core
+        run: npm publish --access public --provenance
+
+      - name: Publish @browser-terminal-use/bridge
+        working-directory: packages/bridge
+        run: npm publish --access public --provenance
+
+      - name: Publish @browser-terminal-use/cli
+        working-directory: packages/cli
+        run: npm publish --access public --provenance
