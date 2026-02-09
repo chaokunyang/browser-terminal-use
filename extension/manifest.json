@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Browser Terminal Bridge",
+  "name": "Browser Terminal Use",
   "version": "0.1.0",
   "description": "Control a browser terminal tab from a local CLI through a localhost bridge.",
   "permissions": [
