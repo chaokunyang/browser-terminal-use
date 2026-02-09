@@ -1,0 +1,4 @@
+interface:
+  display_name: "Browser Terminal Use Agent"
+  short_description: "Run local-to-browser terminal loops for AI agents"
+  default_prompt: "Use $browser-terminal-use-agent to run and iterate commands in a browser terminal from local CLI."
