@@ -26,16 +26,16 @@ npm run lint
 通过 workspace 构建产物启动守护进程：
 
 ```bash
-npm run start:browterm-daemon -- --host 127.0.0.1 --port 17373 --token your-shared-token
+npm run start:browterm-daemon -- --host 127.0.0.1 --port 17373
 ```
 
 通过 workspace 构建产物运行 CLI：
 
 ```bash
-npm run start:browterm -- --token your-shared-token health
-npm run start:browterm -- --token your-shared-token exec "uname -a"
-npm run start:browterm -- --token your-shared-token exec --json "ls -la"
-npm run start:browterm -- --token your-shared-token cancel <requestId>
+npm run start:browterm -- health
+npm run start:browterm -- exec "uname -a"
+npm run start:browterm -- exec --json "ls -la"
+npm run start:browterm -- cancel <requestId>
 ```
 
 ## 开发态 watch

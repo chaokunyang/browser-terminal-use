@@ -24,7 +24,7 @@ npx @browser-terminal-use/bridge --help
 ## Usage
 
 ```bash
-browterm-daemon --host 127.0.0.1 --port 17373 --token your-token
+browterm-daemon --host 127.0.0.1 --port 17373
 ```
 
 ## CLI options
@@ -32,7 +32,7 @@ browterm-daemon --host 127.0.0.1 --port 17373 --token your-token
 ```text
 --host <host>                  Bind host (default: 127.0.0.1)
 --port <port>                  Bind port (default: 17373)
---token <token>                Optional shared token for CLI+extension auth
+--token <token>                Optional shared token for CLI+extension auth (improves security)
 --default-timeout-ms <ms>      Default request timeout (default: 120000)
 --max-timeout-ms <ms>          Maximum timeout allowed (default: 600000)
 --ping-interval-ms <ms>        Ping interval (default: 15000)
@@ -45,7 +45,6 @@ browterm-daemon --host 127.0.0.1 --port 17373 --token your-token
 ```text
 BT_BRIDGE_HOST
 BT_BRIDGE_PORT
-BT_TOKEN
 BT_DEFAULT_TIMEOUT_MS
 BT_MAX_TIMEOUT_MS
 BT_PING_INTERVAL_MS
@@ -61,5 +60,4 @@ BT_LOG_LEVEL
 ## Notes
 
 - The daemon processes one execution request at a time to keep terminal state deterministic.
-- Use a token in production-like setups.
 - Pair this package with `@browser-terminal-use/cli` and the Browser Terminal Use Chrome extension.

@@ -15,7 +15,7 @@ const requestToTab = new Map();
 const debuggerAttachedTabs = new Set();
 
 bootstrap().catch((error) => {
-  console.error("[bt-background] bootstrap failed", error);
+  console.error("[browterm-background] bootstrap failed", error);
 });
 
 async function bootstrap() {
@@ -140,12 +140,12 @@ function setupChromeEventHandlers() {
     const boundTabId = await getBoundTabId();
     if (boundTabId === tab.id) {
       await clearBoundTab();
-      console.info(`[bt-background] unbound tab ${tab.id} (${tab.url ?? ""})`);
+      console.info(`[browterm-background] unbound tab ${tab.id} (${tab.url ?? ""})`);
       return;
     }
 
     await setBoundTab(tab.id);
-    console.info(`[bt-background] bound tab ${tab.id} (${tab.url ?? ""})`);
+    console.info(`[browterm-background] bound tab ${tab.id} (${tab.url ?? ""})`);
   });
 
   chrome.alarms.create("bt_keepalive", { periodInMinutes: 0.5 });
@@ -155,7 +155,7 @@ function setupChromeEventHandlers() {
     }
     if (!bridgeSocket || bridgeSocket.readyState === WebSocket.CLOSED) {
       connectBridge().catch((error) => {
-        console.warn("[bt-background] reconnect alarm failed", error);
+        console.warn("[browterm-background] reconnect alarm failed", error);
       });
     }
     sendTerminalStatus();
@@ -254,7 +254,7 @@ async function connectBridge() {
   });
 
   bridgeSocket.addEventListener("error", (error) => {
-    console.warn("[bt-background] bridge socket error", error);
+    console.warn("[browterm-background] bridge socket error", error);
   });
 }
 
@@ -266,7 +266,7 @@ function scheduleReconnect() {
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connectBridge().catch((error) => {
-      console.warn("[bt-background] reconnect failed", error);
+      console.warn("[browterm-background] reconnect failed", error);
       scheduleReconnect();
     });
   }, reconnectDelayMs);

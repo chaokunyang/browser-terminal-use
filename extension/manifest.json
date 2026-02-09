@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Browser Terminal Bridge",
+  "name": "Browser Terminal Use",
   "version": "0.1.0",
   "description": "Control a browser terminal tab from a local CLI through a localhost bridge.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": [
     "storage",
     "tabs",
@@ -21,7 +27,12 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Bind this tab as Browser Terminal"
+    "default_title": "Bind this tab as Browser Terminal",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
   },
   "options_page": "options.html",
   "content_scripts": [
