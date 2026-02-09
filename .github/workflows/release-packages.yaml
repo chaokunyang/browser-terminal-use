@@ -94,14 +94,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EXPECTED_REPO_URL="https://github.com/chaokunyang/browser-terminal-use"
-          CORE_REPO_URL="$(npm pkg get repository.url --workspace @browser-terminal-use/core | tr -d '\"')"
-          BRIDGE_REPO_URL="$(npm pkg get repository.url --workspace @browser-terminal-use/bridge | tr -d '\"')"
-          CLI_REPO_URL="$(npm pkg get repository.url --workspace @browser-terminal-use/cli | tr -d '\"')"
+          node <<'EOF'
+          const fs = require("node:fs");
 
-          test "$CORE_REPO_URL" = "$EXPECTED_REPO_URL"
-          test "$BRIDGE_REPO_URL" = "$EXPECTED_REPO_URL"
-          test "$CLI_REPO_URL" = "$EXPECTED_REPO_URL"
+          const expected = "https://github.com/chaokunyang/browser-terminal-use";
+          const files = [
+            "packages/core/package.json",
+            "packages/bridge/package.json",
+            "packages/cli/package.json"
+          ];
+
+          for (const file of files) {
+            const json = JSON.parse(fs.readFileSync(file, "utf8"));
+            const actual = json?.repository?.url ?? "";
+            if (actual !== expected) {
+              console.error(
+                `Repository URL mismatch in ${file}: expected "${expected}", got "${actual}"`
+              );
+              process.exit(1);
+            }
+          }
+
+          console.log("repository.url metadata verified for all publishable packages");
+          EOF
 
       - name: Publish @browser-terminal-use/core
         working-directory: packages/core
