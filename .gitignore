@@ -2,7 +2,10 @@ ignored/**
 target/**
 build/**
 dist/**
-node_modules/**
+**/dist/
+node_modules/
+**/node_modules/
+**/.vite/
 coverage/**
 *.log
 *.tmp
@@ -10,6 +13,7 @@ coverage/**
 *.swp
 .DS_Store
 .env
+.npmrc
 .idea/
 .vscode/
 *.sublime-project
