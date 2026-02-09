@@ -1,5 +1,10 @@
 const STATUS_INTERVAL_MS = 5000;
 const COMMAND_TIMEOUT_FALLBACK_MS = 120000;
+const EXTENSION_CONTEXT_INVALIDATED_PATTERNS = [
+  "Extension context invalidated",
+  "Extension context was invalidated",
+  "Could not establish connection. Receiving end does not exist"
+];
 
 let activeExecution = null;
 let pageRequestCounter = 0;
@@ -7,6 +12,7 @@ let statusTimer = null;
 let domObserver = null;
 let domFlushTimer = null;
 let domBuffer = "";
+let runtimeAvailable = true;
 const pageRequests = new Map();
 
 injectPageHook();
@@ -177,7 +183,7 @@ function startStatusHeartbeat() {
 }
 
 function sendStatus(likelyTerminal) {
-  chrome.runtime.sendMessage({
+  void sendRuntimeMessageSafe({
     type: "bt_terminal_status",
     likelyTerminal,
     url: window.location.href
@@ -320,7 +326,7 @@ function handleExecutionChunk(source, chunk) {
 }
 
 function emitExecEvent(type, payload) {
-  chrome.runtime.sendMessage({
+  void sendRuntimeMessageSafe({
     type: "bt_exec_event",
     requestId: payload.requestId,
     payload: {
@@ -393,7 +399,7 @@ async function sendControlC() {
 
 async function sendTrustedInput(text) {
   try {
-    const result = await chrome.runtime.sendMessage({
+    const result = await sendRuntimeMessageSafe({
       type: "bt_trusted_input",
       text
     });
@@ -405,7 +411,7 @@ async function sendTrustedInput(text) {
 
 async function sendTrustedEnter() {
   try {
-    const result = await chrome.runtime.sendMessage({
+    const result = await sendRuntimeMessageSafe({
       type: "bt_trusted_enter"
     });
     return Boolean(result?.ok);
@@ -416,7 +422,7 @@ async function sendTrustedEnter() {
 
 async function sendTrustedCtrlC() {
   try {
-    const result = await chrome.runtime.sendMessage({
+    const result = await sendRuntimeMessageSafe({
       type: "bt_trusted_ctrl_c"
     });
     return Boolean(result?.ok);
@@ -878,6 +884,63 @@ function isMarkerTerminator(buffer, pos) {
   }
   const code = ch.charCodeAt(0);
   return code >= 0 && code <= 0x1f;
+}
+
+function sendRuntimeMessageSafe(message) {
+  if (!canUseRuntime()) {
+    return Promise.resolve(null);
+  }
+
+  try {
+    return chrome.runtime.sendMessage(message).catch((error) => {
+      if (isRuntimeInvalidatedError(error)) {
+        handleRuntimeInvalidated();
+        return null;
+      }
+      throw error;
+    });
+  } catch (error) {
+    if (isRuntimeInvalidatedError(error)) {
+      handleRuntimeInvalidated();
+      return Promise.resolve(null);
+    }
+    return Promise.reject(error);
+  }
+}
+
+function canUseRuntime() {
+  return runtimeAvailable && Boolean(chrome?.runtime?.id);
+}
+
+function isRuntimeInvalidatedError(error) {
+  const text = String(error ?? "");
+  return EXTENSION_CONTEXT_INVALIDATED_PATTERNS.some((pattern) => text.includes(pattern));
+}
+
+function handleRuntimeInvalidated() {
+  if (!runtimeAvailable) {
+    return;
+  }
+  runtimeAvailable = false;
+
+  if (statusTimer) {
+    clearInterval(statusTimer);
+    statusTimer = null;
+  }
+
+  if (activeExecution?.timeoutTimer) {
+    clearTimeout(activeExecution.timeoutTimer);
+  }
+  if (activeExecution?.domFallbackTimer) {
+    clearTimeout(activeExecution.domFallbackTimer);
+  }
+  activeExecution = null;
+  stopDomObserver();
+
+  for (const pending of pageRequests.values()) {
+    pending.reject(new Error("extension runtime unavailable"));
+  }
+  pageRequests.clear();
 }
 
 function injectPageHook() {

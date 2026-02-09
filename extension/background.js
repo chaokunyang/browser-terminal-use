@@ -33,6 +33,13 @@ function setupChromeEventHandlers() {
       return false;
     }
 
+    if (message.type === "bt_unbind_tab") {
+      clearBoundTab()
+        .then(() => sendResponse({ ok: true }))
+        .catch((error) => sendResponse({ ok: false, message: String(error) }));
+      return true;
+    }
+
     if (message.type === "bt_terminal_status") {
       const tabId = sender.tab?.id;
       if (typeof tabId === "number") {
@@ -103,14 +110,7 @@ function setupChromeEventHandlers() {
   });
 
   chrome.tabs.onRemoved.addListener((tabId) => {
-    terminalTabs.delete(tabId);
-    if (debuggerAttachedTabs.has(tabId)) {
-      chrome.debugger.detach({ tabId }).catch(() => {
-        // ignored
-      });
-      debuggerAttachedTabs.delete(tabId);
-    }
-    sendTerminalStatus();
+    void handleTabRemoved(tabId);
   });
 
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -137,11 +137,14 @@ function setupChromeEventHandlers() {
       return;
     }
 
-    await chrome.storage.local.set({ boundTabId: tab.id });
-    await chrome.action.setBadgeText({ tabId: tab.id, text: "BT" });
-    await chrome.action.setBadgeBackgroundColor({ tabId: tab.id, color: "#0b6bcb" });
+    const boundTabId = await getBoundTabId();
+    if (boundTabId === tab.id) {
+      await clearBoundTab();
+      console.info(`[bt-background] unbound tab ${tab.id} (${tab.url ?? ""})`);
+      return;
+    }
 
-    sendTerminalStatus();
+    await setBoundTab(tab.id);
     console.info(`[bt-background] bound tab ${tab.id} (${tab.url ?? ""})`);
   });
 
@@ -339,29 +342,18 @@ async function handleExecCancelFromBridge(message) {
 }
 
 async function pickTerminalTab() {
-  const { boundTabId } = await chrome.storage.local.get(["boundTabId"]);
-  if (typeof boundTabId === "number") {
-    const bound = await getTabById(boundTabId);
-    if (bound) {
-      return boundTabId;
-    }
-    await chrome.storage.local.set({ boundTabId: null });
+  const boundTabId = await getBoundTabId();
+  if (typeof boundTabId !== "number") {
+    return null;
   }
 
-  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (typeof active?.id === "number") {
-    return active.id;
+  const bound = await getTabById(boundTabId);
+  if (bound) {
+    return boundTabId;
   }
 
-  const likely = [...terminalTabs.values()]
-    .filter((entry) => entry.likelyTerminal)
-    .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
-  if (likely.length > 0) {
-    return likely[0].tabId;
-  }
-
-  const fallback = [...terminalTabs.values()].sort((a, b) => b.lastSeenAt - a.lastSeenAt);
-  return fallback.length > 0 ? fallback[0].tabId : null;
+  await clearBoundTab();
+  return null;
 }
 
 async function sendTerminalStatus() {
@@ -369,7 +361,7 @@ async function sendTerminalStatus() {
     return;
   }
 
-  const { boundTabId } = await chrome.storage.local.get(["boundTabId"]);
+  const boundTabId = await getBoundTabId();
   const staleCutoff = Date.now() - 120000;
   for (const [tabId, value] of terminalTabs.entries()) {
     if (value.lastSeenAt < staleCutoff) {
@@ -515,6 +507,58 @@ async function getTabById(tabId) {
     return await chrome.tabs.get(tabId);
   } catch {
     return null;
+  }
+}
+
+async function handleTabRemoved(tabId) {
+  terminalTabs.delete(tabId);
+  if (debuggerAttachedTabs.has(tabId)) {
+    chrome.debugger.detach({ tabId }).catch(() => {
+      // ignored
+    });
+    debuggerAttachedTabs.delete(tabId);
+  }
+
+  const boundTabId = await getBoundTabId();
+  if (boundTabId === tabId) {
+    await clearBoundTab();
+    return;
+  }
+
+  sendTerminalStatus();
+}
+
+async function getBoundTabId() {
+  const { boundTabId } = await chrome.storage.local.get(["boundTabId"]);
+  return typeof boundTabId === "number" ? boundTabId : null;
+}
+
+async function setBoundTab(tabId) {
+  const previousTabId = await getBoundTabId();
+  if (typeof previousTabId === "number" && previousTabId !== tabId) {
+    await clearBadge(previousTabId);
+  }
+
+  await chrome.storage.local.set({ boundTabId: tabId });
+  await chrome.action.setBadgeText({ tabId, text: "BT" });
+  await chrome.action.setBadgeBackgroundColor({ tabId, color: "#0b6bcb" });
+  sendTerminalStatus();
+}
+
+async function clearBoundTab() {
+  const previousTabId = await getBoundTabId();
+  await chrome.storage.local.set({ boundTabId: null });
+  if (typeof previousTabId === "number") {
+    await clearBadge(previousTabId);
+  }
+  sendTerminalStatus();
+}
+
+async function clearBadge(tabId) {
+  try {
+    await chrome.action.setBadgeText({ tabId, text: "" });
+  } catch {
+    // ignored
   }
 }
 
