@@ -2,6 +2,11 @@
   "name": "@browser-terminal-use/bridge",
   "version": "0.1.0",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chaokunyang/browser-terminal-use",
+    "directory": "packages/bridge"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
