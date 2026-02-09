@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="780" viewBox="0 0 1400 780" role="img" aria-labelledby="title desc">
+  <title id="title">Browser Terminal Use Runtime Flow (English)</title>
+  <desc id="desc">End-to-end flow from local CLI to browser terminal execution and output return.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 28px 'Arial', sans-serif; fill: #0f172a; }
+      .subtitle { font: 400 16px 'Arial', sans-serif; fill: #334155; }
+      .lane { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; rx: 12; }
+      .lane-title { font: 700 17px 'Arial', sans-serif; fill: #0f172a; }
+      .box { fill: #ffffff; stroke: #2563eb; stroke-width: 2; rx: 10; }
+      .box-alt { fill: #ffffff; stroke: #16a34a; stroke-width: 2; rx: 10; }
+      .box-core { fill: #eff6ff; stroke: #1d4ed8; stroke-width: 2; rx: 10; }
+      .txt { font: 14px 'Arial', sans-serif; fill: #0f172a; }
+      .txt-small { font: 13px 'Arial', sans-serif; fill: #334155; }
+      .arrow { stroke: #1e293b; stroke-width: 2.2; fill: none; marker-end: url(#arrowhead); }
+      .arrow-dashed { stroke: #475569; stroke-width: 2; fill: none; stroke-dasharray: 8 6; marker-end: url(#arrowhead); }
+      .note { fill: #fff7ed; stroke: #f97316; stroke-width: 1.6; rx: 10; }
+      .note-txt { font: 13px 'Arial', sans-serif; fill: #9a3412; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#1e293b" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1400" height="780" />
+  <text class="title" x="36" y="48">Browser Terminal Use: Runtime Design Flow</text>
+  <text class="subtitle" x="36" y="76">CLI request -> daemon queue -> extension injection -> browser terminal -> parsed output + exit code</text>
+
+  <rect class="lane" x="28" y="106" width="220" height="620" />
+  <text class="lane-title" x="48" y="138">Local macOS</text>
+
+  <rect class="lane" x="270" y="106" width="250" height="620" />
+  <text class="lane-title" x="292" y="138">Bridge Daemon</text>
+
+  <rect class="lane" x="542" y="106" width="300" height="620" />
+  <text class="lane-title" x="564" y="138">Chrome Extension</text>
+
+  <rect class="lane" x="864" y="106" width="500" height="620" />
+  <text class="lane-title" x="886" y="138">Browser Terminal Page / Remote Shell</text>
+
+  <rect class="box" x="52" y="182" width="170" height="92" />
+  <text class="txt" x="66" y="212">1) browterm exec</text>
+  <text class="txt-small" x="66" y="236">send command + timeout</text>
+  <text class="txt-small" x="66" y="256">token + client-id</text>
+
+  <rect class="box" x="292" y="182" width="206" height="92" />
+  <text class="txt" x="306" y="212">2) Auth + enqueue</text>
+  <text class="txt-small" x="306" y="236">single active request</text>
+  <text class="txt-small" x="306" y="256">queue for deterministic run</text>
+
+  <rect class="box-core" x="292" y="308" width="206" height="116" />
+  <text class="txt" x="306" y="338">3) Wrap command (core)</text>
+  <text class="txt-small" x="306" y="362">__BT_START_id__</text>
+  <text class="txt-small" x="306" y="382">( user command ); rc=$?</text>
+  <text class="txt-small" x="306" y="402">__BT_RC_id__:rc + __BT_END_id__</text>
+
+  <rect class="box" x="564" y="182" width="256" height="92" />
+  <text class="txt" x="578" y="212">4) Find bound terminal tab</text>
+  <text class="txt-small" x="578" y="236">service worker routes request</text>
+  <text class="txt-small" x="578" y="256">to content script</text>
+
+  <rect class="box-alt" x="564" y="308" width="256" height="116" />
+  <text class="txt" x="578" y="338">5) Inject command</text>
+  <text class="txt-small" x="578" y="362">preferred: Chrome Debugger API</text>
+  <text class="txt-small" x="578" y="382">fallback: synthetic keyboard input</text>
+  <text class="txt-small" x="578" y="402">send Enter to execute</text>
+
+  <rect class="box" x="886" y="182" width="220" height="92" />
+  <text class="txt" x="900" y="212">6) Terminal executes</text>
+  <text class="txt-small" x="900" y="236">remote shell runs wrapped</text>
+  <text class="txt-small" x="900" y="256">command in browser terminal</text>
+
+  <rect class="box-alt" x="1128" y="182" width="210" height="92" />
+  <text class="txt" x="1142" y="212">7) Output capture</text>
+  <text class="txt-small" x="1142" y="236">websocket interception</text>
+  <text class="txt-small" x="1142" y="256">DOM mutation fallback</text>
+
+  <rect class="box-core" x="886" y="308" width="452" height="116" />
+  <text class="txt" x="900" y="338">8) Parse stream (core parser)</text>
+  <text class="txt-small" x="900" y="362">find START/RC/END markers, strip wrappers</text>
+  <text class="txt-small" x="900" y="382">extract clean stdout/stderr + exit code</text>
+  <text class="txt-small" x="900" y="402">emit incremental chunks to daemon</text>
+
+  <rect class="box" x="292" y="470" width="206" height="92" />
+  <text class="txt" x="306" y="500">9) Bridge streams back</text>
+  <text class="txt-small" x="306" y="524">forward chunks + progress</text>
+  <text class="txt-small" x="306" y="544">final result with exit code</text>
+
+  <rect class="box" x="52" y="470" width="170" height="92" />
+  <text class="txt" x="66" y="500">10) CLI prints output</text>
+  <text class="txt-small" x="66" y="524">stdout in real time</text>
+  <text class="txt-small" x="66" y="544">process exits with same rc</text>
+
+  <rect class="note" x="52" y="604" width="1286" height="94" />
+  <text class="note-txt" x="70" y="634">Timeout / cancellation flow:</text>
+  <text class="note-txt" x="70" y="656">CLI can send cancel. Daemon also enforces timeout. If markers are missing or incompatible, daemon returns a parse/capture error.</text>
+  <text class="note-txt" x="70" y="678">Queue then advances to the next request to keep system behavior deterministic.</text>
+
+  <path class="arrow" d="M222 228 L292 228" />
+  <path class="arrow" d="M498 228 L564 228" />
+  <path class="arrow" d="M498 366 L564 366" />
+  <path class="arrow" d="M820 228 L886 228" />
+  <path class="arrow" d="M1106 228 L1128 228" />
+  <path class="arrow" d="M1230 274 L1230 308" />
+  <path class="arrow" d="M886 366 L820 366" />
+  <path class="arrow" d="M564 366 L520 366 L520 516 L498 516" />
+  <path class="arrow" d="M292 516 L222 516" />
+
+  <path class="arrow-dashed" d="M136 274 L136 470" />
+  <path class="arrow-dashed" d="M394 274 L394 308" />
+  <path class="arrow-dashed" d="M394 424 L394 470" />
+</svg>

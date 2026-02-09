@@ -23,7 +23,29 @@ Chrome extension + local daemon + CLI for executing commands in a browser-hosted
 - `packages/bridge`: websocket daemon and request queue.
 - `packages/cli`: local CLI (`browterm`).
 - `extension`: Chrome extension (MV3).
-- `docs/en/install.md`: install + run guide source.
+- `assets/diagrams`: architecture and runtime flow diagrams.
+
+## Runtime Design
+
+![System Flow Diagram](assets/diagrams/system-flow-en.svg)
+
+### End-to-End Execution Flow
+
+1. Local CLI (`browterm`) sends an `exec` request with command, timeout, token, and client metadata to the daemon.
+2. Bridge daemon authenticates the request, enqueues it, and guarantees single-active execution.
+3. Bridge uses `@browser-terminal-use/core` to wrap the user command with unique start/rc/end markers.
+4. Chrome extension service worker routes the wrapped command to the currently bound terminal tab.
+5. Content script injects command input into terminal UI, preferring Chrome Debugger API and falling back to synthetic input when needed.
+6. Browser terminal executes the wrapped command on the remote shell side.
+7. Extension captures output stream (websocket-first, DOM fallback), then parser isolates marker boundaries.
+8. Bridge receives parsed chunks + exit code, streams output back to CLI, and finalizes with the same remote return code.
+
+### Queue, Timeout, and Cancel Semantics
+
+1. Requests are serialized in the daemon queue to avoid cross-command contamination on one terminal tab.
+2. `--timeout-ms` is enforced server-side; timeout ends active request and unblocks queue.
+3. `browterm cancel <requestId>` can abort active or queued requests from any client sharing token.
+4. If marker parsing fails, daemon returns a capture/compatibility error instead of hanging indefinitely.
 
 ## Install and Run (macOS + Chrome)
 

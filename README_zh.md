@@ -23,7 +23,29 @@ English README: [`README.md`](README.md)
 - `packages/bridge`：WebSocket 守护进程与请求队列。
 - `packages/cli`：本地 CLI（`browterm`）。
 - `extension`：Chrome 扩展（MV3）。
-- `docs/zh/install.md`：安装运行文档来源。
+- `assets/diagrams`：架构与运行流程图。
+
+## 系统运行流程设计
+
+![系统流程图](assets/diagrams/system-flow-zh.svg)
+
+### 端到端执行流程
+
+1. 本地 CLI（`browterm`）将命令、超时、token 与客户端信息发送到守护进程。
+2. Bridge 守护进程完成鉴权并入队，保证同一时刻只执行一个请求。
+3. Bridge 调用 `@browser-terminal-use/core`，为用户命令添加唯一的 start/rc/end 标记。
+4. Chrome 扩展 service worker 将包装后的命令分发到当前已绑定的终端标签页。
+5. Content script 向终端页面注入输入，优先使用 Chrome Debugger API，失败时回退到合成输入。
+6. 浏览器终端在远端 shell 中执行包装后的命令。
+7. 扩展捕获输出流（优先 websocket，回退 DOM），解析器按 marker 抽取有效输出与退出码。
+8. Bridge 将解析后的流式输出和最终退出码返回 CLI，并以远端退出码结束本地进程。
+
+### 队列、超时与取消语义
+
+1. 守护进程串行执行请求，避免同一终端标签页上的命令互相污染。
+2. `--timeout-ms` 在服务端强制生效，超时后结束当前请求并推进队列。
+3. `browterm cancel <requestId>` 可取消运行中或排队中的请求（在同 token 下生效）。
+4. 若 marker 解析失败，守护进程会返回采集/兼容性错误，而不是无限挂起。
 
 ## 安装与运行指南（macOS + Chrome）
 
