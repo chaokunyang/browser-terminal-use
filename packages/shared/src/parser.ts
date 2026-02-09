@@ -144,12 +144,16 @@ function findStartMarkerIndex(buffer: string, marker: string): number {
       return -1;
     }
 
-    const beforeOk = idx === 0 || buffer[idx - 1] === "\n" || buffer[idx - 1] === "\r";
-    if (!beforeOk) {
-      from = idx + 1;
-      continue;
+    const afterPos = idx + marker.length;
+    if (afterPos >= buffer.length) {
+      return -1;
     }
-    return idx;
+
+    if (isMarkerTerminator(buffer, afterPos)) {
+      return idx;
+    }
+
+    from = idx + 1;
   }
 }
 
@@ -162,4 +166,26 @@ function keepPotentialStartPrefix(buffer: string, marker: string): string {
     }
   }
   return "";
+}
+
+function isMarkerTerminator(buffer: string, pos: number): boolean {
+  const ch = buffer[pos];
+  if (!ch) {
+    return false;
+  }
+  if (ch === "\n" || ch === "\r") {
+    return true;
+  }
+  if (ch === "\\" && pos + 1 < buffer.length) {
+    const esc = buffer[pos + 1];
+    if (esc === "n" || esc === "r") {
+      const next = buffer[pos + 2] ?? "";
+      if (next === "'") {
+        return false;
+      }
+      return true;
+    }
+  }
+  const code = ch.charCodeAt(0);
+  return code >= 0 && code <= 0x1f;
 }

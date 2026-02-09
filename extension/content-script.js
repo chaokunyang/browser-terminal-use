@@ -210,9 +210,7 @@ async function handleExecRequest(message) {
     startedAt: Date.now(),
     timeoutMs: normalizeTimeout(message.timeoutMs),
     timeoutTimer: null,
-    markerStartTimer: null,
-    domFallbackTimer: null,
-    wsObserved: false
+    domFallbackTimer: null
   };
 
   activeExecution.timeoutTimer = setTimeout(() => {
@@ -226,27 +224,10 @@ async function handleExecRequest(message) {
   }, activeExecution.timeoutMs);
 
   activeExecution.domFallbackTimer = setTimeout(() => {
-    if (activeExecution && !activeExecution.wsObserved && !domObserver) {
+    if (activeExecution && !activeExecution.source && !domObserver) {
       startDomObserver();
     }
   }, 1500);
-
-  const markerWaitMs = Math.min(15000, Math.max(4000, Math.floor(activeExecution.timeoutMs / 3)));
-  activeExecution.markerStartTimer = setTimeout(() => {
-    if (!activeExecution || activeExecution.requestId !== message.requestId || activeExecution.source) {
-      return;
-    }
-
-    emitExecEvent("exec_error", {
-      requestId: message.requestId,
-      message:
-        "no command markers observed in terminal output; output capture may be incompatible with this terminal page"
-    });
-    sendControlC().catch(() => {
-      // ignored
-    });
-    cleanupExecution();
-  }, markerWaitMs);
 
   const sent = await sendInputToTerminal(wrappedCommand);
   if (!sent) {
@@ -285,16 +266,9 @@ function handleExecutionChunk(source, chunk) {
     return;
   }
 
-  let normalizedChunk = chunk;
-  if (source === "ws") {
-    normalizedChunk = sanitizeWsChunk(chunk);
-    if (!normalizedChunk) {
-      return;
-    }
-  }
-
-  if (source === "ws") {
-    activeExecution.wsObserved = true;
+  const rawChunk = typeof chunk === "string" ? chunk : String(chunk ?? "");
+  if (!rawChunk) {
+    return;
   }
 
   if (activeExecution.source && activeExecution.source !== source) {
@@ -302,11 +276,10 @@ function handleExecutionChunk(source, chunk) {
   }
 
   const parser = activeExecution.parserBySource[source];
-  const result = parser.feed(normalizedChunk);
+  const result = parser.feed(rawChunk);
 
   if (!activeExecution.source && result.started) {
     activeExecution.source = source;
-    clearMarkerStartTimer();
     if (source === "ws") {
       stopDomObserver();
     }
@@ -317,13 +290,15 @@ function handleExecutionChunk(source, chunk) {
   }
 
   for (const part of result.chunks) {
-    if (part.length === 0) {
+    const cleanedPart =
+      source === "ws" ? cleanEmittedWsOutput(part) : stripBinaryNoise(part);
+    if (cleanedPart.length === 0) {
       continue;
     }
-    activeExecution.output += part;
+    activeExecution.output += cleanedPart;
     emitExecEvent("exec_output", {
       requestId: activeExecution.requestId,
-      chunk: part,
+      chunk: cleanedPart,
       source
     });
   }
@@ -363,9 +338,6 @@ function cleanupExecution() {
   if (activeExecution.timeoutTimer) {
     clearTimeout(activeExecution.timeoutTimer);
   }
-  if (activeExecution.markerStartTimer) {
-    clearTimeout(activeExecution.markerStartTimer);
-  }
   if (activeExecution.domFallbackTimer) {
     clearTimeout(activeExecution.domFallbackTimer);
   }
@@ -373,19 +345,18 @@ function cleanupExecution() {
   activeExecution = null;
 }
 
-function clearMarkerStartTimer() {
-  if (!activeExecution || !activeExecution.markerStartTimer) {
-    return;
-  }
-  clearTimeout(activeExecution.markerStartTimer);
-  activeExecution.markerStartTimer = null;
-}
-
 async function sendInputToTerminal(commandText) {
-  const trusted = await sendTrustedInput(commandText);
-  if (trusted) {
-    const enterOk = await sendTrustedEnter();
-    if (enterOk) {
+  focusTerminalForInput();
+
+  const trustedTyped = await sendTrustedInput(commandText);
+  if (trustedTyped) {
+    const trustedEnter = await sendTrustedEnter();
+    if (trustedEnter) {
+      return true;
+    }
+
+    const fallbackEnter = await sendEnterFallback();
+    if (fallbackEnter) {
       return true;
     }
   }
@@ -397,10 +368,16 @@ async function sendInputToTerminal(commandText) {
     return true;
   }
 
-  return sendInputViaKeyboard(`${commandText}\n`);
+  const typedByKeyboard = sendInputViaKeyboard(commandText);
+  if (!typedByKeyboard) {
+    return false;
+  }
+  return sendEnterViaKeyboard();
 }
 
 async function sendControlC() {
+  focusTerminalForInput();
+
   const trusted = await sendTrustedCtrlC();
   if (trusted) {
     return true;
@@ -446,6 +423,14 @@ async function sendTrustedCtrlC() {
   } catch {
     return false;
   }
+}
+
+async function sendEnterFallback() {
+  const bySocket = await sendPageRequest("send-input", { text: "\n" }, 600).catch(() => null);
+  if (bySocket?.ok) {
+    return true;
+  }
+  return sendEnterViaKeyboard();
 }
 
 function sendPageRequest(action, payload, timeoutMs) {
@@ -612,6 +597,16 @@ function sendInputViaKeyboard(text) {
   return true;
 }
 
+function sendEnterViaKeyboard() {
+  const target = findInputTarget();
+  if (!target) {
+    return false;
+  }
+  target.focus();
+  dispatchKey(target, "Enter", "Enter", 13);
+  return true;
+}
+
 function sendCtrlCViaKeyboard() {
   const target = findInputTarget();
   if (!target) {
@@ -695,6 +690,22 @@ function findInputTarget() {
   return document.body;
 }
 
+function focusTerminalForInput() {
+  const root = findTerminalRoot();
+  if (root instanceof HTMLElement) {
+    root.focus();
+    root.click();
+  }
+
+  const target = findInputTarget();
+  if (target && typeof target.focus === "function") {
+    target.focus();
+    if (target instanceof HTMLElement) {
+      target.click();
+    }
+  }
+}
+
 function isElementEditable(element) {
   if (!element || !(element instanceof HTMLElement)) {
     return false;
@@ -754,50 +765,64 @@ function trimSingleLeadingNewline(input) {
   return input;
 }
 
-function sanitizeWsChunk(chunk) {
-  if (typeof chunk !== "string" || chunk.length === 0) {
+function cleanEmittedWsOutput(chunk) {
+  const normalized = stripBinaryNoise(chunk);
+  if (!normalized) {
     return "";
   }
 
-  if (!looksLikeRpcNoise(chunk)) {
-    return chunk;
+  if (!looksLikeRpcNoise(normalized)) {
+    return normalized;
   }
 
-  const byPrefixRegex = chunk.replace(
-    /[^\n\r]*RPCService[^\n\r]*ITerminalServicePath:onMessage[^\n\r]*?(?:[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F]+)+/g,
-    ""
-  );
-  if (byPrefixRegex !== chunk) {
-    return byPrefixRegex;
-  }
-
-  const marker = "ITerminalServicePath:onMessage";
-  const idx = chunk.lastIndexOf(marker);
-  if (idx >= 0) {
-    const tail = chunk.slice(idx + marker.length);
-    const parts = tail
-      .split(/[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F]+/g)
-      .map((item) => item.trimStart())
-      .filter(Boolean);
-
-    for (const part of parts) {
-      if (/RPCService|ITerminalServicePath:onMessage/.test(part)) {
-        continue;
-      }
-      if (/^\"?[A-Za-z0-9_-]+\|[A-Za-z0-9_-]+\"?$/.test(part)) {
-        continue;
-      }
-      return part;
+  const lines = normalized.split(/\r?\n/);
+  const kept = [];
+  for (const line of lines) {
+    if (!line) {
+      kept.push(line);
+      continue;
     }
+    if (isRpcNoiseLine(line)) {
+      continue;
+    }
+    kept.push(line);
   }
 
-  return chunk.replace(/[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F]+/g, "");
+  return kept.join("\n");
 }
 
 function looksLikeRpcNoise(text) {
   return (
     typeof text === "string" &&
-    (text.includes("RPCService") || text.includes("ITerminalServicePath:onMessage"))
+    (text.includes("RPCService") ||
+      text.includes("ITerminalServicePath") ||
+      text.includes("ExtMainThreadConnection") ||
+      text.includes("MainThreadStatusBar/") ||
+      text.includes("plugin-status-bar-item:") ||
+      text.includes("extension_extend_service:"))
+  );
+}
+
+function stripBinaryNoise(text) {
+  if (typeof text !== "string") {
+    return "";
+  }
+  return text.replace(/[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F]+/g, "");
+}
+
+function isRpcNoiseLine(line) {
+  if (typeof line !== "string") {
+    return false;
+  }
+
+  return (
+    line.includes("RPCService") ||
+    line.includes("ITerminalServicePath") ||
+    line.includes("ExtMainThreadConnection") ||
+    line.includes("MainThreadStatusBar/") ||
+    line.includes("plugin-status-bar-item:") ||
+    line.includes("extension_extend_service:") ||
+    line.includes("aistudio-monitor (扩展)")
   );
 }
 
@@ -809,12 +834,16 @@ function findStartMarkerIndex(buffer, marker) {
       return -1;
     }
 
-    const beforeOk = idx === 0 || buffer[idx - 1] === "\n" || buffer[idx - 1] === "\r";
-    if (!beforeOk) {
-      from = idx + 1;
-      continue;
+    const afterPos = idx + marker.length;
+    if (afterPos >= buffer.length) {
+      return -1;
     }
-    return idx;
+
+    if (isMarkerTerminator(buffer, afterPos)) {
+      return idx;
+    }
+
+    from = idx + 1;
   }
 }
 
@@ -827,6 +856,28 @@ function keepPotentialStartPrefix(buffer, marker) {
     }
   }
   return "";
+}
+
+function isMarkerTerminator(buffer, pos) {
+  const ch = buffer[pos];
+  if (!ch) {
+    return false;
+  }
+  if (ch === "\n" || ch === "\r") {
+    return true;
+  }
+  if (ch === "\\" && pos + 1 < buffer.length) {
+    const esc = buffer[pos + 1];
+    if (esc === "n" || esc === "r") {
+      const next = buffer[pos + 2] || "";
+      if (next === "'") {
+        return false;
+      }
+      return true;
+    }
+  }
+  const code = ch.charCodeAt(0);
+  return code >= 0 && code <= 0x1f;
 }
 
 function injectPageHook() {

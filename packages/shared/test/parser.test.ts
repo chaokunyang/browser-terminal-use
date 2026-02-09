@@ -38,11 +38,11 @@ describe("marker parser", () => {
     expect(parser.getOutput()).toBe("abc");
   });
 
-  it("captures markers when stream text starts directly with marker", () => {
+  it("captures markers when stream text starts with marker and newline", () => {
     const markers = buildMarkers("json-case");
     const parser = new MarkerParser(markers);
 
-    const first = parser.feed(`${markers.start}hello `);
+    const first = parser.feed(`${markers.start}\nhello `);
     expect(first.started).toBe(true);
     expect(first.completed).toBe(false);
 
@@ -68,5 +68,19 @@ describe("marker parser", () => {
     expect(parser.getExitCode()).toBe(0);
     expect(parser.getOutput()).toContain("file-a");
     expect(parser.getOutput()).not.toContain("__bt_rc");
+  });
+
+  it("accepts escaped newline terminator after start marker", () => {
+    const markers = buildMarkers("esc-term");
+    const parser = new MarkerParser(markers);
+
+    const first = parser.feed(`${markers.start}\\nabc`);
+    expect(first.started).toBe(true);
+    expect(first.completed).toBe(false);
+
+    const second = parser.feed(`${markers.rcPrefix}0${markers.end}`);
+    expect(second.completed).toBe(true);
+    expect(parser.getExitCode()).toBe(0);
+    expect(parser.getOutput()).toContain("abc");
   });
 });

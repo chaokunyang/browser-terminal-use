@@ -286,6 +286,8 @@ async function handleExecRequestFromBridge(message) {
   requestToTab.set(message.requestId, targetTabId);
 
   try {
+    await activateTabForInput(targetTabId);
+
     const response = await sendMessageWithInjection(targetTabId, {
       type: "bt_exec_request",
       requestId: message.requestId,
@@ -513,5 +515,13 @@ async function getTabById(tabId) {
     return await chrome.tabs.get(tabId);
   } catch {
     return null;
+  }
+}
+
+async function activateTabForInput(tabId) {
+  try {
+    await chrome.tabs.update(tabId, { active: true });
+  } catch {
+    // ignored
   }
 }
