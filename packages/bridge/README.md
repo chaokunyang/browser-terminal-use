@@ -1,5 +1,9 @@
 # @browser-terminal-use/bridge
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/chaokunyang/browser-terminal-use/aa9e7888f2d8e33728caf83a236d65426f301cf1/assets/logo/browser-terminal-use-logo.svg" alt="Browser Terminal Use logo" width="760" />
+</p>
+
 Local daemon for Browser Terminal Use.
 
 This package exposes `browterm-daemon`, a WebSocket bridge that:
