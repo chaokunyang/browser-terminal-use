@@ -25,14 +25,34 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: "https://registry.npmjs.org"
           cache: npm
+
+      - name: Upgrade npm for trusted publishing
+        run: npm i -g npm@latest
+
+      - name: Verify Node/npm versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Node: $(node --version)"
+          echo "npm: $(npm --version)"
+          REQUIRED="11.5.1"
+          CURRENT="$(npm --version)"
+          if [[ "$(printf '%s\n' "$REQUIRED" "$CURRENT" | sort -V | head -n1)" != "$REQUIRED" ]]; then
+            echo "npm version must be >= $REQUIRED for trusted publishing. current=$CURRENT"
+            exit 1
+          fi
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build all workspaces
-        run: npm run build
+      - name: Prepare npm for trusted publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm config set registry https://registry.npmjs.org/
+          npm config delete //registry.npmjs.org/:_authToken || true
+          npm config get registry
 
       - name: Update versions from tag
         shell: bash
@@ -59,14 +79,34 @@ jobs:
           npm pkg get version --workspace @browser-terminal-use/bridge
           npm pkg get version --workspace @browser-terminal-use/cli
 
+      - name: Build all workspaces
+        run: npm run build
+
+      - name: Verify package visibility in npm registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm view @browser-terminal-use/core name
+          npm view @browser-terminal-use/bridge name
+          npm view @browser-terminal-use/cli name
+
       - name: Publish @browser-terminal-use/core
         working-directory: packages/core
         run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
 
       - name: Publish @browser-terminal-use/bridge
         working-directory: packages/bridge
         run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
 
       - name: Publish @browser-terminal-use/cli
         working-directory: packages/cli
         run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
