@@ -1,0 +1,23 @@
+{
+  "name": "@browser-terminal-use/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "browterm": "dist/index.js"
+  },
+  "scripts": {
+    "build": "npm run build --workspace @browser-terminal-use/core && tsc -p tsconfig.json",
+    "dev": "npm run build --workspace @browser-terminal-use/core && tsx watch src/index.ts",
+    "test": "node -e \"console.log('cli: no unit tests yet')\"",
+    "lint": "npm run build --workspace @browser-terminal-use/core && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@browser-terminal-use/core": "file:../core",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

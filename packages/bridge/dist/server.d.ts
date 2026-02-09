@@ -1,0 +1,37 @@
+import type { BridgeRuntimeConfig } from "./config.js";
+export declare class BridgeServer {
+    private readonly config;
+    private readonly startedAt;
+    private readonly socketStates;
+    private readonly cliSockets;
+    private readonly requests;
+    private readonly queue;
+    private httpServer;
+    private wsServer;
+    private extensionSocket;
+    private pingTimer;
+    private activeRequestId;
+    constructor(config: BridgeRuntimeConfig);
+    start(): Promise<void>;
+    stop(): Promise<void>;
+    private handleHttpRequest;
+    private handleUpgrade;
+    private onSocketConnection;
+    private authenticate;
+    private onAuthedMessage;
+    private handleCliMessage;
+    private enqueueExec;
+    private cancelRequest;
+    private handleExtensionMessage;
+    private forwardExecutionEvent;
+    private dispatchQueue;
+    private completeRequest;
+    private failRequest;
+    private onSocketClosed;
+    private cancelRequestsOwnedByCli;
+    private healthPayload;
+    private sendPings;
+    private send;
+    private sendError;
+    private log;
+}
