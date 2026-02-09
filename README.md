@@ -24,6 +24,7 @@ Chrome extension + local daemon + CLI for executing commands in a browser-hosted
 - `packages/cli`: local CLI (`browterm`).
 - `extension`: Chrome extension (MV3).
 - `assets/diagrams`: architecture and runtime flow diagrams.
+- `DEVELOPMENT.md`: repository development commands.
 
 ## Runtime Design
 
@@ -55,13 +56,10 @@ Chrome extension + local daemon + CLI for executing commands in a browser-hosted
 2. Google Chrome (Developer mode enabled for extension loading).
 3. Access to the target browser terminal page.
 
-### 2. Build
-
-From repo root:
+### 2. Install CLI and daemon
 
 ```bash
-npm install
-npm run build
+npm install -g @browser-terminal-use/bridge @browser-terminal-use/cli
 ```
 
 ### 3. Start Local Bridge Daemon
@@ -69,7 +67,7 @@ npm run build
 Run daemon on localhost:
 
 ```bash
-npm run start:browterm-daemon -- --host 127.0.0.1 --port 17373 --token your-shared-token
+browterm-daemon --host 127.0.0.1 --port 17373 --token your-shared-token
 ```
 
 Optional flags:
@@ -114,25 +112,25 @@ curl http://127.0.0.1:17373/v1/health
 Health check:
 
 ```bash
-npm run start:browterm -- --token your-shared-token health
+browterm --token your-shared-token health
 ```
 
 Execute command:
 
 ```bash
-npm run start:browterm -- --token your-shared-token exec "uname -a"
+browterm --token your-shared-token exec "uname -a"
 ```
 
 JSON mode:
 
 ```bash
-npm run start:browterm -- --token your-shared-token exec --json "ls -la"
+browterm --token your-shared-token exec --json "ls -la"
 ```
 
 Cancel running request:
 
 ```bash
-npm run start:browterm -- --token your-shared-token cancel <requestId>
+browterm --token your-shared-token cancel <requestId>
 ```
 
 ### 8. Expected Behavior
@@ -211,10 +209,6 @@ Global options:
 3. Cross-origin iframe terminals can reduce observability depending on page constraints.
 4. Truly interactive TUIs are not fully supported (current model is command-oriented, not full PTY mirroring).
 
-## Validation
+## Development
 
-- Build: `npm run build`
-- Test: `npm run test`
-- Type check: `npm run lint`
-
-All pass in this repository state.
+For repository build/test/run commands, see `DEVELOPMENT.md`.
