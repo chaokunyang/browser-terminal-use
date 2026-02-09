@@ -1,0 +1,23 @@
+{
+  "name": "@bt/bridge",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "bt-bridge": "dist/index.js"
+  },
+  "scripts": {
+    "build": "npm run build --workspace @bt/shared && tsc -p tsconfig.json",
+    "dev": "npm run build --workspace @bt/shared && tsx watch src/index.ts",
+    "test": "node -e \"console.log('bridge: no unit tests yet')\"",
+    "lint": "npm run build --workspace @bt/shared && tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@bt/shared": "file:../shared",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

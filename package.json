@@ -1,0 +1,27 @@
+{
+  "name": "browser-terminal-use",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension + local bridge + CLI for browser terminal automation",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @bt/shared && npm run build --workspace @bt/bridge && npm run build --workspace @bt/cli",
+    "test": "npm run test --workspace @bt/shared && npm run test --workspace @bt/bridge && npm run test --workspace @bt/cli",
+    "lint": "npm run lint --workspace @bt/shared && npm run lint --workspace @bt/bridge && npm run lint --workspace @bt/cli",
+    "dev:bridge": "npm run dev --workspace @bt/bridge",
+    "dev:cli": "npm run dev --workspace @bt/cli",
+    "start:bridge": "node packages/bridge/dist/index.js",
+    "start:cli": "node packages/cli/dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

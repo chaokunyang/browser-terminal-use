@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browser Terminal Bridge Options</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Browser Terminal Bridge</h1>
+      <form id="settings-form">
+        <label for="bridge-url">Bridge URL</label>
+        <input id="bridge-url" name="bridge-url" type="text" placeholder="ws://127.0.0.1:17373/extension" />
+
+        <label for="token">Auth Token (optional)</label>
+        <input id="token" name="token" type="password" placeholder="shared secret" />
+
+        <button type="submit">Save</button>
+      </form>
+
+      <section>
+        <h2>Current Binding</h2>
+        <p id="bound-tab">No tab bound yet. Click extension toolbar icon on the terminal tab.</p>
+      </section>
+
+      <section>
+        <h2>Notes</h2>
+        <ul>
+          <li>Open your browser terminal tab first.</li>
+          <li>Click extension icon to bind that tab for command execution.</li>
+          <li>Run bridge daemon locally, then use CLI to execute commands.</li>
+        </ul>
+      </section>
+
+      <p id="status" role="status"></p>
+    </main>
+
+    <script src="options.js" type="module"></script>
+  </body>
+</html>
