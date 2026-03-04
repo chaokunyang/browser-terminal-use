@@ -58,6 +58,38 @@ Example:
 browterm exec --request-id req-env-check --timeout-ms 120000 --json "uname -a"
 ```
 
+### Quote-Safe Command Rules
+
+Use these rules to avoid dangling quotes and malformed wrapped commands:
+
+- Do not pass multiline commands to `browterm exec`.
+- Do not use heredoc (`<<EOF`) inside `browterm exec` command strings.
+- Prefer one-line commands joined by `;` or `&&`.
+- For generated files, use `printf '%s\n' ... > file` instead of heredoc.
+- For JSON payload files, prefer `jq -n '...' > file`.
+
+Safe patterns:
+
+```bash
+browterm exec --request-id req-basic --timeout-ms 120000 --json "hostname; whoami; pwd"
+
+browterm exec --request-id req-json --timeout-ms 120000 --json \
+  "jq -n '{input_ids:[1,2,3],stream:false}' > /tmp/req.json; cat /tmp/req.json"
+
+browterm exec --request-id req-script --timeout-ms 120000 --json \
+  "printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'echo ok' > /tmp/bt_step.sh; bash /tmp/bt_step.sh"
+```
+
+Avoid:
+
+```bash
+# Avoid multiline/heredoc payloads inside browterm exec
+browterm exec --request-id bad --timeout-ms 120000 --json \
+  'cat >/tmp/x <<EOF
+line1
+EOF'
+```
+
 Cancel stuck or obsolete work by request id:
 
 ```bash
