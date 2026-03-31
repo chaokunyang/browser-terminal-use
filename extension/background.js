@@ -10,8 +10,8 @@ let reconnectTimer = null;
 let reconnectDelayMs = 1500;
 let statusInterval = null;
 
-const terminalTabs = new Map();
-const requestToTab = new Map();
+const terminalFrames = new Map();
+const requestTargets = new Map();
 const debuggerAttachedTabs = new Set();
 
 bootstrap().catch((error) => {
@@ -42,12 +42,15 @@ function setupChromeEventHandlers() {
 
     if (message.type === "bt_terminal_status") {
       const tabId = sender.tab?.id;
+      const frameId = normalizeFrameId(sender.frameId);
       if (typeof tabId === "number") {
-        terminalTabs.set(tabId, {
+        terminalFrames.set(makeTerminalFrameKey(tabId, frameId), {
           tabId,
+          frameId,
           url: sender.tab?.url ?? message.url ?? "",
           title: sender.tab?.title ?? "",
           likelyTerminal: Boolean(message.likelyTerminal),
+          hasTerminalSocket: Boolean(message.hasTerminalSocket),
           lastSeenAt: Date.now()
         });
         sendTerminalStatus();
@@ -58,10 +61,16 @@ function setupChromeEventHandlers() {
 
     if (message.type === "bt_exec_event") {
       if (message.requestId && sender.tab?.id) {
-        requestToTab.set(message.requestId, sender.tab.id);
+        requestTargets.set(message.requestId, {
+          tabId: sender.tab.id,
+          frameId: normalizeFrameId(sender.frameId)
+        });
       }
       if (bridgeSocket && bridgeSocket.readyState === WebSocket.OPEN) {
         bridgeSocket.send(JSON.stringify(message.payload));
+      }
+      if (isFinalExecEventType(message.payload?.type) && message.requestId) {
+        requestTargets.delete(message.requestId);
       }
       sendResponse({ ok: true });
       return true;
@@ -114,20 +123,21 @@ function setupChromeEventHandlers() {
   });
 
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (!terminalTabs.has(tabId)) {
+    if (!hasTrackedTerminalFramesForTab(tabId)) {
       return;
     }
     if (changeInfo.status === "loading") {
-      terminalTabs.delete(tabId);
+      removeTerminalFramesForTab(tabId);
       sendTerminalStatus();
       return;
     }
     if (changeInfo.url) {
-      const current = terminalTabs.get(tabId);
-      if (current) {
-        current.url = changeInfo.url;
-        current.title = tab.title ?? current.title;
-        current.lastSeenAt = Date.now();
+      for (const frame of getTerminalFramesForTab(tabId)) {
+        if (frame.frameId === 0) {
+          frame.url = changeInfo.url;
+          frame.title = tab.title ?? frame.title;
+          frame.lastSeenAt = Date.now();
+        }
       }
     }
   });
@@ -275,8 +285,8 @@ function scheduleReconnect() {
 }
 
 async function handleExecRequestFromBridge(message) {
-  const targetTabId = await pickTerminalTab();
-  if (!targetTabId) {
+  const target = await pickTerminalTarget();
+  if (!target) {
     sendBridgeMessage({
       type: "exec_error",
       requestId: message.requestId,
@@ -286,12 +296,12 @@ async function handleExecRequestFromBridge(message) {
     return;
   }
 
-  requestToTab.set(message.requestId, targetTabId);
+  requestTargets.set(message.requestId, target);
 
   try {
-    await activateTabForInput(targetTabId);
+    await activateTabForInput(target.tabId);
 
-    const response = await sendMessageWithInjection(targetTabId, {
+    const response = await sendMessageWithInjection(target, {
       type: "bt_exec_request",
       requestId: message.requestId,
       command: message.command,
@@ -309,15 +319,15 @@ async function handleExecRequestFromBridge(message) {
     sendBridgeMessage({
       type: "exec_error",
       requestId: message.requestId,
-      message: `failed to send command to tab ${targetTabId}: ${String(error)}`
+      message: `failed to send command to tab ${target.tabId}: ${String(error)}`
     });
   }
 }
 
 async function handleExecCancelFromBridge(message) {
-  const explicitTab = requestToTab.get(message.requestId);
-  const tabId = explicitTab ?? (await pickTerminalTab());
-  if (!tabId) {
+  const explicitTarget = requestTargets.get(message.requestId);
+  const target = explicitTarget ?? (await pickTerminalTarget());
+  if (!target) {
     sendBridgeMessage({
       type: "exec_cancelled",
       requestId: message.requestId,
@@ -327,7 +337,7 @@ async function handleExecCancelFromBridge(message) {
   }
 
   try {
-    await sendMessageWithInjection(tabId, {
+    await sendMessageWithInjection(target, {
       type: "bt_exec_cancel",
       requestId: message.requestId,
       reason: message.reason ?? "cancel_requested"
@@ -336,24 +346,33 @@ async function handleExecCancelFromBridge(message) {
     sendBridgeMessage({
       type: "exec_error",
       requestId: message.requestId,
-      message: `failed to cancel command in tab ${tabId}: ${String(error)}`
+      message: `failed to cancel command in tab ${target.tabId}: ${String(error)}`
     });
   }
 }
 
-async function pickTerminalTab() {
+async function pickTerminalTarget() {
   const boundTabId = await getBoundTabId();
   if (typeof boundTabId !== "number") {
     return null;
   }
 
   const bound = await getTabById(boundTabId);
-  if (bound) {
-    return boundTabId;
+  if (!bound) {
+    await clearBoundTab();
+    return null;
   }
 
-  await clearBoundTab();
-  return null;
+  let target = chooseBestTerminalTarget(boundTabId);
+  if (target) {
+    return target;
+  }
+
+  await ensureContentScriptsInjected(boundTabId, null);
+  await waitForFrameStatus();
+  target = chooseBestTerminalTarget(boundTabId);
+
+  return target ?? { tabId: boundTabId, frameId: 0 };
 }
 
 async function sendTerminalStatus() {
@@ -362,22 +381,17 @@ async function sendTerminalStatus() {
   }
 
   const boundTabId = await getBoundTabId();
-  const staleCutoff = Date.now() - 120000;
-  for (const [tabId, value] of terminalTabs.entries()) {
-    if (value.lastSeenAt < staleCutoff) {
-      terminalTabs.delete(tabId);
-    }
-  }
+  pruneStaleTerminalFrames();
 
   const active = await chrome.tabs.query({ active: true, currentWindow: true });
   const activeTabId = active[0]?.id ?? null;
 
   sendBridgeMessage({
     type: "terminal_status",
-    terminalCount: terminalTabs.size,
+    terminalCount: terminalFrames.size,
     activeTabId,
     boundTabId: typeof boundTabId === "number" ? boundTabId : null,
-    tabIds: [...terminalTabs.keys()]
+    tabIds: [...new Set([...terminalFrames.values()].map((frame) => frame.tabId))]
   });
 }
 
@@ -480,20 +494,17 @@ async function ensureDebuggerAttached(tabId) {
   }
 }
 
-async function sendMessageWithInjection(tabId, payload) {
+async function sendMessageWithInjection(target, payload) {
   try {
-    return await chrome.tabs.sendMessage(tabId, payload);
+    return await chrome.tabs.sendMessage(target.tabId, payload, buildFrameMessageOptions(target.frameId));
   } catch (error) {
     if (!isMissingReceiverError(error)) {
       throw error;
     }
 
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ["content-script.js"]
-    });
+    await ensureContentScriptsInjected(target.tabId, target.frameId);
 
-    return chrome.tabs.sendMessage(tabId, payload);
+    return chrome.tabs.sendMessage(target.tabId, payload, buildFrameMessageOptions(target.frameId));
   }
 }
 
@@ -511,7 +522,12 @@ async function getTabById(tabId) {
 }
 
 async function handleTabRemoved(tabId) {
-  terminalTabs.delete(tabId);
+  removeTerminalFramesForTab(tabId);
+  for (const [requestId, target] of requestTargets.entries()) {
+    if (target.tabId === tabId) {
+      requestTargets.delete(requestId);
+    }
+  }
   if (debuggerAttachedTabs.has(tabId)) {
     chrome.debugger.detach({ tabId }).catch(() => {
       // ignored
@@ -568,4 +584,120 @@ async function activateTabForInput(tabId) {
   } catch {
     // ignored
   }
+}
+
+function normalizeFrameId(frameId) {
+  return typeof frameId === "number" && frameId >= 0 ? frameId : 0;
+}
+
+function isFinalExecEventType(type) {
+  return (
+    type === "exec_result" ||
+    type === "exec_error" ||
+    type === "exec_cancelled"
+  );
+}
+
+function makeTerminalFrameKey(tabId, frameId) {
+  return `${tabId}:${frameId}`;
+}
+
+function hasTrackedTerminalFramesForTab(tabId) {
+  for (const frame of terminalFrames.values()) {
+    if (frame.tabId === tabId) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function getTerminalFramesForTab(tabId) {
+  const frames = [];
+  for (const frame of terminalFrames.values()) {
+    if (frame.tabId === tabId) {
+      frames.push(frame);
+    }
+  }
+  return frames;
+}
+
+function removeTerminalFramesForTab(tabId) {
+  for (const [key, frame] of terminalFrames.entries()) {
+    if (frame.tabId === tabId) {
+      terminalFrames.delete(key);
+    }
+  }
+}
+
+function pruneStaleTerminalFrames() {
+  const staleCutoff = Date.now() - 120000;
+  for (const [key, frame] of terminalFrames.entries()) {
+    if (frame.lastSeenAt < staleCutoff) {
+      terminalFrames.delete(key);
+    }
+  }
+}
+
+function chooseBestTerminalTarget(tabId) {
+  const now = Date.now();
+  let bestFrame = null;
+  let bestScore = -Infinity;
+
+  for (const frame of getTerminalFramesForTab(tabId)) {
+    let score = 0;
+    if (frame.hasTerminalSocket) {
+      score += 12;
+    }
+    if (frame.likelyTerminal) {
+      score += 6;
+    }
+    if (frame.frameId === 0) {
+      score += 1;
+    }
+    score += Math.max(0, 10 - Math.floor((now - frame.lastSeenAt) / 10000));
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestFrame = frame;
+    }
+  }
+
+  if (!bestFrame) {
+    return null;
+  }
+
+  return {
+    tabId,
+    frameId: bestFrame.frameId
+  };
+}
+
+function buildFrameMessageOptions(frameId) {
+  if (typeof frameId !== "number") {
+    return undefined;
+  }
+  return { frameId };
+}
+
+async function ensureContentScriptsInjected(tabId, frameId) {
+  const target =
+    typeof frameId === "number"
+      ? { tabId, frameIds: [frameId] }
+      : { tabId, allFrames: true };
+
+  await chrome.scripting.executeScript({
+    target,
+    files: ["page-hook.js"],
+    world: "MAIN"
+  });
+  await chrome.scripting.executeScript({
+    target,
+    files: ["content-script.js"]
+  });
+}
+
+async function waitForFrameStatus() {
+  await new Promise((resolve) => {
+    setTimeout(resolve, 150);
+  });
 }
