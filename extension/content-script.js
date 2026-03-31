@@ -1,5 +1,6 @@
 const STATUS_INTERVAL_MS = 5000;
 const COMMAND_TIMEOUT_FALLBACK_MS = 120000;
+const START_CONFIRM_TIMEOUT_MS = 1500;
 const EXTENSION_CONTEXT_INVALIDATED_PATTERNS = [
   "Extension context invalidated",
   "Extension context was invalidated",
@@ -15,7 +16,6 @@ let domBuffer = "";
 let runtimeAvailable = true;
 const pageRequests = new Map();
 
-injectPageHook();
 setupMessageBridges();
 setupRuntimeHandlers();
 startStatusHeartbeat();
@@ -168,24 +168,26 @@ function setupMessageBridges() {
     }
 
     if (message.source === "bt-page-hook" && message.type === "bt-page-hook-status") {
-      sendStatus(Boolean(message.hasTerminalSocket));
+      sendStatus(isLikelyTerminalPage() || Boolean(message.hasTerminalSocket), Boolean(message.hasTerminalSocket));
     }
   });
 }
 
 function startStatusHeartbeat() {
-  sendStatus(false);
+  sendStatus(isLikelyTerminalPage(), false);
   statusTimer = setInterval(async () => {
     const hook = await sendPageRequest("status", {}, 800).catch(() => null);
-    const likely = isLikelyTerminalPage() || Boolean(hook?.hasTerminalSocket);
-    sendStatus(likely);
+    const hasTerminalSocket = Boolean(hook?.hasTerminalSocket);
+    const likely = isLikelyTerminalPage() || hasTerminalSocket;
+    sendStatus(likely, hasTerminalSocket);
   }, STATUS_INTERVAL_MS);
 }
 
-function sendStatus(likelyTerminal) {
+function sendStatus(likelyTerminal, hasTerminalSocket) {
   void sendRuntimeMessageSafe({
     type: "bt_terminal_status",
     likelyTerminal,
+    hasTerminalSocket,
     url: window.location.href
   });
 }
@@ -216,7 +218,8 @@ async function handleExecRequest(message) {
     startedAt: Date.now(),
     timeoutMs: normalizeTimeout(message.timeoutMs),
     timeoutTimer: null,
-    domFallbackTimer: null
+    domFallbackTimer: null,
+    startWaiters: []
   };
 
   activeExecution.timeoutTimer = setTimeout(() => {
@@ -229,17 +232,14 @@ async function handleExecRequest(message) {
     });
   }, activeExecution.timeoutMs);
 
-  activeExecution.domFallbackTimer = setTimeout(() => {
-    if (activeExecution && !activeExecution.source && !domObserver) {
-      startDomObserver();
-    }
-  }, 1500);
+  // Start DOM capture immediately so fast commands cannot emit markers before fallback begins.
+  startDomObserver();
 
   const sent = await sendInputToTerminal(wrappedCommand);
   if (!sent) {
     emitExecEvent("exec_error", {
       requestId: message.requestId,
-      message: "failed to deliver command to terminal"
+      message: "failed to deliver command to terminal after marker confirmation retries"
     });
     cleanupExecution();
     return { ok: false, message: "command injection failed" };
@@ -286,6 +286,7 @@ function handleExecutionChunk(source, chunk) {
 
   if (!activeExecution.source && result.started) {
     activeExecution.source = source;
+    resolveExecutionStartWaiters();
     if (source === "ws") {
       stopDomObserver();
     }
@@ -347,38 +348,65 @@ function cleanupExecution() {
   if (activeExecution.domFallbackTimer) {
     clearTimeout(activeExecution.domFallbackTimer);
   }
+  rejectExecutionStartWaiters();
   stopDomObserver();
   activeExecution = null;
 }
 
 async function sendInputToTerminal(commandText) {
-  focusTerminalForInput();
+  const deliveryMethods = [
+    {
+      name: "trusted-input",
+      run: async () => {
+        focusTerminalForInput();
+        const trustedTyped = await sendTrustedInput(commandText);
+        if (!trustedTyped) {
+          return false;
+        }
 
-  const trustedTyped = await sendTrustedInput(commandText);
-  if (trustedTyped) {
-    const trustedEnter = await sendTrustedEnter();
-    if (trustedEnter) {
-      return true;
+        const trustedEnter = await sendTrustedEnter();
+        if (trustedEnter) {
+          return true;
+        }
+
+        return sendEnterFallback();
+      }
+    },
+    {
+      name: "socket-input",
+      run: async () => {
+        const bySocket = await sendPageRequest("send-input", { text: `${commandText}\n` }, 1500).catch(
+          () => null
+        );
+        return Boolean(bySocket?.ok);
+      }
+    },
+    {
+      name: "keyboard-input",
+      run: async () => {
+        focusTerminalForInput();
+        const typedByKeyboard = sendInputViaKeyboard(commandText);
+        if (!typedByKeyboard) {
+          return false;
+        }
+        return sendEnterViaKeyboard();
+      }
+    }
+  ];
+
+  for (const method of deliveryMethods) {
+    const sent = await method.run();
+    if (!sent) {
+      continue;
     }
 
-    const fallbackEnter = await sendEnterFallback();
-    if (fallbackEnter) {
+    const started = await waitForExecutionStart(START_CONFIRM_TIMEOUT_MS);
+    if (started) {
       return true;
     }
   }
 
-  const bySocket = await sendPageRequest("send-input", { text: `${commandText}\n` }, 1500).catch(
-    () => null
-  );
-  if (bySocket?.ok) {
-    return true;
-  }
-
-  const typedByKeyboard = sendInputViaKeyboard(commandText);
-  if (!typedByKeyboard) {
-    return false;
-  }
-  return sendEnterViaKeyboard();
+  return false;
 }
 
 async function sendControlC() {
@@ -470,6 +498,60 @@ function sendPageRequest(action, payload, timeoutMs) {
       "*"
     );
   });
+}
+
+function waitForExecutionStart(timeoutMs) {
+  if (!activeExecution) {
+    return Promise.resolve(false);
+  }
+
+  if (activeExecution.source) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (!activeExecution) {
+        resolve(false);
+        return;
+      }
+
+      const index = activeExecution.startWaiters.findIndex((entry) => entry.resolve === resolve);
+      if (index >= 0) {
+        activeExecution.startWaiters.splice(index, 1);
+      }
+      resolve(false);
+    }, timeoutMs);
+
+    activeExecution.startWaiters.push({
+      resolve,
+      timer
+    });
+  });
+}
+
+function resolveExecutionStartWaiters() {
+  if (!activeExecution) {
+    return;
+  }
+
+  const waiters = activeExecution.startWaiters.splice(0);
+  for (const waiter of waiters) {
+    clearTimeout(waiter.timer);
+    waiter.resolve(true);
+  }
+}
+
+function rejectExecutionStartWaiters() {
+  if (!activeExecution) {
+    return;
+  }
+
+  const waiters = activeExecution.startWaiters.splice(0);
+  for (const waiter of waiters) {
+    clearTimeout(waiter.timer);
+    waiter.resolve(false);
+  }
 }
 
 function startDomObserver() {
@@ -941,23 +1023,4 @@ function handleRuntimeInvalidated() {
     pending.reject(new Error("extension runtime unavailable"));
   }
   pageRequests.clear();
-}
-
-function injectPageHook() {
-  if (window.__btPageHookInjected) {
-    return;
-  }
-  window.__btPageHookInjected = true;
-
-  const script = document.createElement("script");
-  script.src = chrome.runtime.getURL("page-hook.js");
-  script.async = false;
-
-  const parent = document.documentElement || document.head || document.body;
-  if (!parent) {
-    return;
-  }
-
-  parent.appendChild(script);
-  script.remove();
 }
